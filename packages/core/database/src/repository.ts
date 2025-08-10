@@ -37,7 +37,7 @@ import injectTargetCollection from './decorators/target-collection-decorator';
 import { transactionWrapperBuilder } from './decorators/transaction-decorator';
 import { EagerLoadingTree } from './eager-loading/eager-loading-tree';
 import { ArrayFieldRepository } from './field-repository/array-field-repository';
-import { ArrayField, RelationField } from './fields';
+import { ArrayField, Field, RelationField } from './fields';
 import FilterParser from './filter-parser';
 import { Model } from './model';
 import operators from './operators';
@@ -638,6 +638,102 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
     return this.create({ values, transaction, context, ...rest });
   }
 
+  private filterAssociationField(options: { field: Field; values: Values }) {
+    const { field, values } = options;
+    const key = field.name;
+    if (field.targetKey && values[key][field.targetKey]) {
+      values[key] = _.pick(values[key], field.targetKey);
+    } else {
+      delete values[key];
+    }
+  }
+
+  private filterAssociationFieldAtKey(options: { field: RelationField; parentValues: any }) {
+    const { field, parentValues } = options;
+    const key = field.name;
+    const v = parentValues?.[key];
+
+    if (Array.isArray(v)) {
+      const tk = (field as RelationField).targetKey;
+      if (!tk) {
+        delete parentValues[key];
+        return;
+      }
+      parentValues[key] = v
+        .map((item) => {
+          if (item && typeof item === 'object' && tk in item) {
+            return { [tk]: item[tk] };
+          }
+          return item;
+        })
+        .filter((item) => {
+          if (item && typeof item === 'object') {
+            return tk in item;
+          }
+          return true;
+        });
+      return;
+    }
+
+    this.filterAssociationField({ field, values: parentValues });
+  }
+
+  validateAssociationPermissions(options: (CreateOptions | UpdateOptions) & { collection?: Collection }) {
+    const { context, updateAssociationValues = [], values, collection = this.collection } = options;
+    if (context) {
+      const paths = updateAssociationValues;
+
+      const visit = (nodeValues: any, coll: Collection, candPaths: string[]) => {
+        if (!nodeValues || typeof nodeValues !== 'object') return;
+
+        for (const key of Object.keys(nodeValues)) {
+          const field = coll.fields.get(key);
+          if (!(field instanceof RelationField)) {
+            continue;
+          }
+
+          const direct = candPaths.includes(key);
+          const childPaths = candPaths.filter((p) => p.startsWith(`${key}.`)).map((p) => p.slice(key.length + 1));
+
+          if (!direct && childPaths.length === 0) {
+            this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+            continue;
+          }
+
+          const result = context.can({ action: 'update', resource: key });
+          if (!result) {
+            throw new Error(`No permission to update association ${key}`);
+          }
+
+          const current = nodeValues[key];
+          if (current == null) {
+            continue;
+          }
+
+          if (direct && childPaths.length === 0) {
+            this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+            continue;
+          }
+
+          const targetColl = (field as RelationField).targetCollection();
+          if (!targetColl) continue;
+
+          if (Array.isArray(current)) {
+            for (const item of current) {
+              if (item && typeof item === 'object') {
+                visit(item, targetColl, childPaths);
+              }
+            }
+          } else if (typeof current === 'object') {
+            visit(current, targetColl, childPaths);
+          }
+        }
+      };
+
+      visit(values, collection, paths);
+    }
+  }
+
   /**
    * Save instance to database
    *
@@ -653,6 +749,7 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
       });
     }
 
+    this.validateAssociationPermissions(options);
     const transaction = await this.getTransaction(options);
 
     const guard = UpdateGuard.fromOptions(this.model, {
@@ -729,6 +826,7 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
       });
     }
 
+    this.validateAssociationPermissions(options);
     const transaction = await this.getTransaction(options);
 
     const guard = UpdateGuard.fromOptions(this.model, { ...options, underscored: this.collection.options.underscored });
