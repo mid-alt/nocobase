@@ -680,6 +680,10 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
 
   validateAssociationPermissions(options: (CreateOptions | UpdateOptions) & { collection?: Collection }) {
     const { context, updateAssociationValues = [], values, collection = this.collection } = options;
+    if (['collections', 'fields'].includes(this.collection.name)) {
+      // Skip permission check for collections
+      return;
+    }
     if (context) {
       const paths = updateAssociationValues;
 
