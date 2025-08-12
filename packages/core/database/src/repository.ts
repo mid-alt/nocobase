@@ -698,12 +698,23 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
 
           const direct = candPaths.includes(key);
           const childPaths = candPaths.filter((p) => p.startsWith(`${key}.`)).map((p) => p.slice(key.length + 1));
+          const isTreeChildren = Boolean((field as any)?.options?.treeChildren);
 
+          // If this relation is not targeted by updateAssociationValues and has no deeper paths,
+          // treat it as a leaf. For non-tree children, filter it to targetKey only as link-only.
+          // For tree children (e.g., 'children' in tree collections), keep the value intact to allow
+          // creating/updating child nodes by full object values.
           if (!direct && childPaths.length === 0) {
-            this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+            if (!isTreeChildren) {
+              this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+            }
             continue;
           }
-
+          if (!context.can) {
+            // No permission checker provided; do not enforce permission here.
+            // Still allow deeper traversal below for non-leaf relations.
+            continue;
+          }
           const result = context.can({ action: 'update', resource: key });
           if (!result) {
             throw new Error(`No permission to update association ${key}`);
@@ -714,7 +725,9 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
             continue;
           }
 
-          if (direct && childPaths.length === 0) {
+          // If this relation itself is the final path segment (leaf) and not a tree children field,
+          // then keep only targetKey.
+          if (direct && childPaths.length === 0 && !isTreeChildren) {
             this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
             continue;
           }

@@ -780,4 +780,34 @@ describe('update associations with nested paths & permissions', () => {
     const calledResources = getCalledResources(can);
     expect(calledResources).toEqual(expect.arrayContaining(['assoc1', 'assoc2', 'assoc3', 'assoc4', 'assoc5']));
   });
+
+  it('tree children: should not filter children and allow creating child nodes without updateAssociationValues', async () => {
+    db.collection({
+      name: 'nodes',
+      tree: 'adjacencyList',
+      fields: [
+        { type: 'string', name: 'name' },
+        { type: 'belongsTo', name: 'parent', target: 'nodes', foreignKey: 'parentId', treeParent: true },
+        { type: 'hasMany', name: 'children', target: 'nodes', foreignKey: 'parentId', treeChildren: true },
+      ],
+    });
+
+    await db.sync();
+
+    const root = await db.getRepository('nodes').create({
+      values: {
+        name: 'root',
+        children: [{ name: 'c1' }, { name: 'c2' }],
+      },
+    });
+
+    const children = await db.getRepository('nodes').find({
+      filter: { parentId: root.get('id') },
+      sort: ['id'],
+    });
+
+    expect(children.length).toBe(2);
+    expect(children[0].get('name')).toBe('c1');
+    expect(children[1].get('name')).toBe('c2');
+  });
 });
