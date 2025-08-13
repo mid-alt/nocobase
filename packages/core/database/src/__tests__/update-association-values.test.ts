@@ -432,7 +432,13 @@ describe('update associations', () => {
       },
     });
     expect(createdAResult.get('b')[0].id).toBe(createdBResult.get('id'));
-    expect(createdAResult.get('b')[0].name).toBe('b456');
+
+    const bResult = await db.getRepository('b').findOne({
+      where: {
+        id: createdBResult.id,
+      },
+    });
+    expect(bResult.get('name')).toBe('b456');
 
     const cResult = await db.getRepository('c').findOne({
       where: {
@@ -778,7 +784,7 @@ describe('update associations with nested paths & permissions', () => {
     expect(rt5b.get('t6Id')).toBeFalsy();
 
     const calledResources = getCalledResources(can);
-    expect(calledResources).toEqual(expect.arrayContaining(['assoc1', 'assoc2', 'assoc3', 'assoc4', 'assoc5']));
+    expect(calledResources).toEqual(expect.arrayContaining(['t1', 't2', 't3', 't4', 't5']));
   });
 
   it('tree children: should not filter children and allow creating child nodes without updateAssociationValues', async () => {

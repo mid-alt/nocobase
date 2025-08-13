@@ -50,6 +50,7 @@ import { RelationRepository } from './relation-repository/relation-repository';
 import { updateAssociations, updateModelByValues } from './update-associations';
 import { UpdateGuard } from './update-guard';
 import { valuesToFilter } from './utils/filter-utils';
+import { getKeysByPrefix } from './utils';
 
 const debug = require('debug')('noco-database');
 
@@ -678,77 +679,81 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
     this.filterAssociationField({ field, values: parentValues });
   }
 
+  getAssociationAction(values: Values, targetKey: string) {
+    if (Array.isArray(values)) {
+      return values[0]?.[targetKey] ? 'update' : 'create';
+    }
+    return values?.[targetKey] ? 'update' : 'create';
+  }
+
   validateAssociationPermissions(options: (CreateOptions | UpdateOptions) & { collection?: Collection }) {
-    const { context, updateAssociationValues = [], values, collection = this.collection } = options;
-    if (['collections', 'fields'].includes(this.collection.name)) {
-      // Skip permission check for collections
+    const { context = {}, updateAssociationValues = [], values, collection = this.collection } = options;
+    if (['collections', 'fields', 'uiSchemas'].includes(this.collection.name)) {
+      // Skip permission check for collections, fields and uiSchemas
       return;
     }
-    if (context) {
-      const paths = updateAssociationValues;
 
-      const visit = (nodeValues: any, coll: Collection, candPaths: string[]) => {
-        if (!nodeValues || typeof nodeValues !== 'object') return;
+    const paths = updateAssociationValues;
 
-        for (const key of Object.keys(nodeValues)) {
-          const field = coll.fields.get(key);
-          if (!(field instanceof RelationField)) {
-            continue;
-          }
+    const visit = (nodeValues: any, coll: Collection, candPaths: string[]) => {
+      if (!nodeValues || typeof nodeValues !== 'object') return;
 
-          const direct = candPaths.includes(key);
-          const childPaths = candPaths.filter((p) => p.startsWith(`${key}.`)).map((p) => p.slice(key.length + 1));
-          const isTreeChildren = Boolean((field as any)?.options?.treeChildren);
-
-          // If this relation is not targeted by updateAssociationValues and has no deeper paths,
-          // treat it as a leaf. For non-tree children, filter it to targetKey only as link-only.
-          // For tree children (e.g., 'children' in tree collections), keep the value intact to allow
-          // creating/updating child nodes by full object values.
-          if (!direct && childPaths.length === 0) {
-            if (!isTreeChildren) {
-              this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
-            }
-            continue;
-          }
-          if (!context.can) {
-            // No permission checker provided; do not enforce permission here.
-            // Still allow deeper traversal below for non-leaf relations.
-            continue;
-          }
-          const result = context.can({ action: 'update', resource: key });
-          if (!result) {
-            throw new Error(`No permission to update association ${key}`);
-          }
-
-          const current = nodeValues[key];
-          if (current == null) {
-            continue;
-          }
-
-          // If this relation itself is the final path segment (leaf) and not a tree children field,
-          // then keep only targetKey.
-          if (direct && childPaths.length === 0 && !isTreeChildren) {
-            this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
-            continue;
-          }
-
-          const targetColl = (field as RelationField).targetCollection();
-          if (!targetColl) continue;
-
-          if (Array.isArray(current)) {
-            for (const item of current) {
-              if (item && typeof item === 'object') {
-                visit(item, targetColl, childPaths);
-              }
-            }
-          } else if (typeof current === 'object') {
-            visit(current, targetColl, childPaths);
-          }
+      for (const key of Object.keys(nodeValues)) {
+        const field = coll.fields.get(key);
+        if (!(field instanceof RelationField)) {
+          continue;
         }
-      };
+        const isTreeChildren = Boolean(field?.options?.treeChildren);
+        if (!options.updateAssociationValues && !isTreeChildren) {
+          this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+          continue;
+        }
 
-      visit(values, collection, paths);
-    }
+        const direct = candPaths.includes(key);
+        const childPaths = getKeysByPrefix(candPaths, key);
+
+        // If this relation is not targeted by updateAssociationValues and has no deeper paths,
+        // treat it as a leaf. For non-tree children, filter it to targetKey only as link-only.
+        // For tree children (e.g., 'children' in tree collections), keep the value intact to allow
+        // creating/updating child nodes by full object values.
+        if (!direct && childPaths.length === 0) {
+          if (!isTreeChildren) {
+            this.filterAssociationFieldAtKey({ field, parentValues: nodeValues });
+          }
+          continue;
+        }
+        if (!context.can) {
+          // No permission checker provided; do not enforce permission here.
+          // Still allow deeper traversal below for non-leaf relations.
+          continue;
+        }
+        const action = this.getAssociationAction(nodeValues[key], field.targetKey);
+        const allowed = context.can({ action, resource: field.target });
+
+        if (!allowed && (!context.permission || !context.permission.skip)) {
+          throw new Error(`No permission to update association ${key}`);
+        }
+
+        const current = nodeValues[key];
+        if (current == null) {
+          continue;
+        }
+
+        const targetColl = (field as RelationField).targetCollection();
+        if (!targetColl) continue;
+
+        if (Array.isArray(current)) {
+          for (const item of current) {
+            if (item && typeof item === 'object') {
+              visit(item, targetColl, childPaths);
+            }
+          }
+        } else if (typeof current === 'object') {
+          visit(current, targetColl, childPaths);
+        }
+      }
+    };
+    visit(values, collection, paths);
   }
 
   /**
@@ -765,7 +770,6 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
         records: options.values,
       });
     }
-
     this.validateAssociationPermissions(options);
     const transaction = await this.getTransaction(options);
 
