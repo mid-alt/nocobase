@@ -56,6 +56,7 @@ const debug = require('debug')('noco-database');
 
 interface CreateManyOptions extends BulkCreateOptions {
   records: Values[];
+  updateAssociationValues?: AssociationKeysToBeUpdate;
 }
 
 export { Transactionable } from 'sequelize';
@@ -642,8 +643,12 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
   private filterAssociationField(options: { field: Field; values: Values }) {
     const { field, values } = options;
     const key = field.name;
-    if (field.targetKey && values[key][field.targetKey]) {
-      values[key] = _.pick(values[key], field.targetKey);
+    const v = values[key];
+    if (!_.isObject(v)) {
+      return;
+    }
+    if (field.targetKey && v[field.targetKey]) {
+      values[key] = _.pick(v, field.targetKey);
     } else {
       delete values[key];
     }
@@ -688,7 +693,7 @@ export class Repository<TModelAttributes extends {} = any, TCreationAttributes e
 
   validateAssociationPermissions(options: (CreateOptions | UpdateOptions) & { collection?: Collection }) {
     const { context = {}, updateAssociationValues = [], values, collection = this.collection } = options;
-    if (['collections', 'fields', 'uiSchemas'].includes(this.collection.name)) {
+    if (['collections', 'fields', 'uiSchemas', 'systemSettings'].includes(this.collection.name)) {
       // Skip permission check for collections, fields and uiSchemas
       return;
     }
