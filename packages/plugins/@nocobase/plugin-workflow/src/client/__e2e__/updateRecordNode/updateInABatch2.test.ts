@@ -80,7 +80,7 @@ test('Collection event add data trigger, filter integer field not empty, common 
 
   //配置更新数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'update', exact: true }).click();
@@ -165,7 +165,7 @@ test('Collection event add data trigger, filter integer field not empty, common 
 
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -238,7 +238,7 @@ test('Collection event add data trigger, filter numeric field not null, common t
 
   //配置更新数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'update', exact: true }).click();
@@ -318,7 +318,7 @@ test('Collection event add data trigger, filter numeric field not null, common t
 
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -389,7 +389,7 @@ test('Collection event add data trigger, filter numeric field not empty, common 
 
   //配置更新数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'update', exact: true }).click();
@@ -475,7 +475,7 @@ test('Collection event add data trigger, filter numeric field not empty, common 
 
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -545,7 +545,7 @@ test('Collection event add data trigger, filter dropdown radio field not null, c
   const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
   //配置更新数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'update', exact: true }).click();
@@ -628,7 +628,7 @@ test('Collection event add data trigger, filter dropdown radio field not null, c
 
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -699,7 +699,7 @@ test('Collection event add data trigger, filter dropdown radio field not empty, 
 
   //配置更新数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'update', exact: true }).click();
@@ -787,7 +787,7 @@ test('Collection event add data trigger, filter dropdown radio field not empty, 
 
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));

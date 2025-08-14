@@ -15,6 +15,17 @@ import Application from '@nocobase/server';
 import axios from 'axios';
 import CustomRequestPlugin from '../plugin';
 
+function toJSON(value) {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return value;
+    }
+  }
+  return value;
+}
+
 const getHeaders = (headers: Record<string, any>) => {
   return Object.keys(headers).reduce((hds, key) => {
     if (key.toLocaleLowerCase().startsWith('x-')) {
@@ -55,6 +66,14 @@ const getCurrentUserAppends = (str: string, user) => {
     .filter(Boolean);
 };
 
+export const getParsedValue = (value, variables) => {
+  const template = parse(value);
+  template.parameters.forEach(({ key }) => {
+    appendArrayColumn(variables, key);
+  });
+  return template(variables);
+};
+
 export async function send(this: CustomRequestPlugin, ctx: Context, next: Next) {
   const resourceName = ctx.action.resourceName;
   const { filterByTk, values = {} } = ctx.action.params;
@@ -64,19 +83,20 @@ export async function send(this: CustomRequestPlugin, ctx: Context, next: Next) 
       appends: [],
       data: {},
     },
+    $nForm,
+    $nSelectedRecord,
   } = values;
 
   // root role has all permissions
   if (ctx.state.currentRole !== 'root') {
-    const crRepo = ctx.db.getRepository('customRequestsRoles');
+    const crRepo = ctx.db.getRepository('uiButtonSchemasRoles');
     const hasRoles = await crRepo.find({
       filter: {
-        customRequestKey: filterByTk,
+        uid: filterByTk,
       },
     });
-
     if (hasRoles.length) {
-      if (!hasRoles.find((item) => item.roleName === ctx.state.currentRole)) {
+      if (!hasRoles.some((item) => ctx.state.currentRoles.includes(item.roleName))) {
         return ctx.throw(403, 'custom request no permission');
       }
     }
@@ -144,30 +164,23 @@ export async function send(this: CustomRequestPlugin, ctx: Context, next: Next) 
     currentUser,
     currentTime: new Date().toISOString(),
     $nToken: ctx.getBearerToken(),
-  };
-
-  const getParsedValue = (value) => {
-    const template = parse(value);
-    template.parameters.forEach(({ key }) => {
-      appendArrayColumn(variables, key);
-    });
-    return template(variables);
+    $nForm,
+    $env: ctx.app.environment.getVariables(),
+    $nSelectedRecord,
   };
 
   const axiosRequestConfig = {
     baseURL: ctx.origin,
     ...options,
-    url: getParsedValue(url),
+    url: getParsedValue(url, variables),
     headers: {
       Authorization: 'Bearer ' + ctx.getBearerToken(),
       ...getHeaders(ctx.headers),
-      ...omitNullAndUndefined(getParsedValue(arrayToObject(headers))),
+      ...omitNullAndUndefined(getParsedValue(arrayToObject(headers), variables)),
     },
-    params: getParsedValue(arrayToObject(params)),
-    data: getParsedValue(data),
+    params: getParsedValue(arrayToObject(params), variables),
+    data: getParsedValue(toJSON(data), variables),
   };
-
-  console.log(axiosRequestConfig);
 
   const requestUrl = axios.getUri(axiosRequestConfig);
   this.logger.info(`custom-request:send:${filterByTk} request url ${requestUrl}`);

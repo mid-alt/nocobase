@@ -18,7 +18,7 @@ test.describe('variables', () => {
     await page.getByLabel('action-Action.Link-View-view-').hover();
     await page.getByLabel('designer-schema-settings-Action.Link-actionSettings:view-users').hover();
     await page.getByRole('menuitem', { name: 'Linkage rules' }).click();
-    await page.getByLabel('variable-button').click();
+    await page.getByTestId('left-filter-field').getByLabel('variable-button').click();
 
     // 2. 断言应该显示的变量
     ['Constant', 'Current user', 'Current role', 'API token', 'Date variables', 'Current record'].forEach(
@@ -61,7 +61,7 @@ test.describe('variables', () => {
     await page.getByRole('menuitemcheckbox', { name: 'Table selected records right' }).click();
     await page.getByRole('menuitemcheckbox', { name: 'm2m' }).click();
     await page.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(page.getByLabel('block-item-CollectionField-')).toHaveText(
+    await expect(page.getByLabel('block-item-CollectionField-')).toContainText(
       `m2m:${record.m2m.map((r) => r.id).join('')}`,
     );
 

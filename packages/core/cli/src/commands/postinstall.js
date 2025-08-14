@@ -8,11 +8,19 @@
  */
 
 const { Command } = require('commander');
-const { run, isDev, isPackageValid, generatePlaywrightPath } = require('../util');
+const { run, isDev, isPackageValid, generatePlaywrightPath, generatePlugins } = require('../util');
 const { dirname, resolve } = require('path');
 const { existsSync, mkdirSync, readFileSync, appendFileSync } = require('fs');
 const { readFile, writeFile } = require('fs').promises;
 const { createStoragePluginsSymlink, createDevPluginsSymlink } = require('@nocobase/utils/plugin-symlink');
+
+function runPatchPackage() {
+  // run yarn patch-package
+  // console.log('patching third party packages...');
+  run('yarn', ['patch-package'], {
+    stdio: 'pipe',
+  });
+}
 
 function writeToExclude() {
   const excludePath = resolve(process.cwd(), '.git', 'info', 'exclude');
@@ -47,8 +55,9 @@ module.exports = (cli) => {
     .allowUnknownOption()
     .option('--skip-umi')
     .action(async (options) => {
+      runPatchPackage();
       writeToExclude();
-
+      generatePlugins();
       generatePlaywrightPath(true);
       await createStoragePluginsSymlink();
       if (!isDev()) {

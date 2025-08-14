@@ -20,7 +20,6 @@ import { CollectionFieldProvider } from '../../../data-source/collection-field/C
 import { withDynamicSchemaProps } from '../../../hoc/withDynamicSchemaProps';
 import { useDataFormItemProps } from '../../../modules/blocks/data-blocks/form/hooks/useDataFormItemProps';
 import { GeneralSchemaDesigner } from '../../../schema-settings';
-import { useContextVariable, useVariables } from '../../../variables';
 import { BlockItem } from '../block-item';
 import { HTMLEncode } from '../input/shared';
 import { FilterFormDesigner } from './FormItem.FilterFormDesigner';
@@ -28,6 +27,9 @@ import { useEnsureOperatorsValid } from './SchemaSettingOptions';
 import useLazyLoadDisplayAssociationFieldsOfForm from './hooks/useLazyLoadDisplayAssociationFieldsOfForm';
 import { useLinkageRulesForSubTableOrSubForm } from './hooks/useLinkageRulesForSubTableOrSubForm';
 import useParseDefaultValue from './hooks/useParseDefaultValue';
+import { useTranslation } from 'react-i18next';
+import { NAMESPACE_UI_SCHEMA } from '../../../i18n/constant';
+import { VariableScope } from '../../../variables/VariableScope';
 
 Item.displayName = 'FormilyFormItem';
 
@@ -38,11 +40,23 @@ const formItemWrapCss = css`
   .ant-description-textarea img {
     max-width: 100%;
   }
+  &.ant-formily-item-layout-vertical .ant-formily-item-label {
+    display: inline;
+    .ant-formily-item-label-tooltip-icon {
+      display: inline;
+    }
+    .ant-formily-item-label-content {
+      display: inline;
+    }
+  }
 `;
 
 const formItemLabelCss = css`
+  .ant-card-body {
+    padding: 0px !important;
+  }
   > .ant-formily-item-label {
-    display: none;
+    display: none !important;
   }
 `;
 
@@ -52,13 +66,8 @@ export const FormItem: any = withDynamicSchemaProps(
     const field = useField<Field>();
     const schema = useFieldSchema();
     const { addActiveFieldName } = useFormActiveFields() || {};
-    const { wrapperStyle } = useDataFormItemProps();
-    const variables = useVariables();
-    const contextVariable = useContextVariable();
-    useEffect(() => {
-      variables?.registerVariable(contextVariable);
-    }, [contextVariable, variables]);
-    // 需要放在注冊完变量之后
+    const { wrapperStyle }: { wrapperStyle: any } = useDataFormItemProps();
+    const { t } = useTranslation();
     useParseDefaultValue();
     useLazyLoadDisplayAssociationFieldsOfForm();
     useLinkageRulesForSubTableOrSubForm();
@@ -66,14 +75,16 @@ export const FormItem: any = withDynamicSchemaProps(
     useEffect(() => {
       addActiveFieldName?.(schema.name as string);
     }, [addActiveFieldName, schema.name]);
-
+    field.title = field.title && t(field.title, { ns: NAMESPACE_UI_SCHEMA });
     const showTitle = schema['x-decorator-props']?.showTitle ?? true;
     const extra = useMemo(() => {
       if (field.description && field.description !== '') {
         return typeof field.description === 'string' ? (
           <div
             dangerouslySetInnerHTML={{
-              __html: HTMLEncode(field.description).split('\n').join('<br/>'),
+              __html: HTMLEncode(t(field.description, { ns: NAMESPACE_UI_SCHEMA }))
+                .split('\n')
+                .join('<br/>'),
             }}
           />
         ) : (
@@ -86,15 +97,40 @@ export const FormItem: any = withDynamicSchemaProps(
         [formItemLabelCss]: showTitle === false,
       });
     }, [showTitle]);
+    // 联动规则中的“隐藏保留值”的效果
+    if (field.data?.hidden) {
+      return null;
+    }
 
     return (
-      <CollectionFieldProvider allowNull={true}>
-        <BlockItem className={'nb-form-item'}>
-          <ACLCollectionFieldProvider>
-            <Item className={className} {...props} extra={extra} wrapperStyle={wrapperStyle} />
-          </ACLCollectionFieldProvider>
-        </BlockItem>
-      </CollectionFieldProvider>
+      <VariableScope scopeId={schema?.['x-uid']} type="formItem">
+        <CollectionFieldProvider allowNull={true}>
+          <BlockItem
+            className={cx(
+              'nb-form-item',
+              css`
+                .ant-formily-item-layout-horizontal .ant-formily-item-control {
+                  max-width: ${showTitle === false || schema['x-component'] !== 'CollectionField'
+                    ? '100% !important'
+                    : null};
+                }
+              `,
+            )}
+          >
+            <ACLCollectionFieldProvider>
+              <Item
+                className={className}
+                {...props}
+                extra={extra}
+                wrapperStyle={{
+                  ...(wrapperStyle.backgroundColor ? { paddingLeft: '5px', paddingRight: '5px' } : {}),
+                  ...wrapperStyle,
+                }}
+              />
+            </ACLCollectionFieldProvider>
+          </BlockItem>
+        </CollectionFieldProvider>
+      </VariableScope>
     );
   }),
   { displayName: 'FormItem' },

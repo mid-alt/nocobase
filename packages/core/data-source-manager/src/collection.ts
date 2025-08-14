@@ -7,9 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { CollectionOptions, ICollection, ICollectionManager, IField, IRepository } from './types';
 import { default as lodash } from 'lodash';
 import { CollectionField } from './collection-field';
+import { CollectionOptions, ICollection, ICollectionManager, IField, IRepository } from './types';
 
 export class Collection implements ICollection {
   repository: IRepository;
@@ -17,7 +17,7 @@ export class Collection implements ICollection {
 
   constructor(
     protected options: CollectionOptions,
-    protected collectionManager: ICollectionManager,
+    public collectionManager: ICollectionManager,
   ) {
     this.setRepository(options.repository);
 
@@ -74,6 +74,15 @@ export class Collection implements ICollection {
 
   getField(name: string) {
     return this.fields.get(name);
+  }
+
+  getFieldByField(field: string): IField {
+    for (const item of this.fields.values()) {
+      if (item.options.field === field) {
+        return item;
+      }
+    }
+    return null;
   }
 
   getFields() {

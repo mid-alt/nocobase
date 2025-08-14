@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { FormOutlined } from '@ant-design/icons';
+import { ProjectOutlined } from '@ant-design/icons';
 import { FormLayout } from '@formily/antd-v5';
 import { SchemaOptionsContext, useForm } from '@formily/react';
 import React, { useContext } from 'react';
@@ -22,6 +22,7 @@ import {
   SchemaComponent,
   SchemaComponentOptions,
   useAPIClient,
+  useApp,
   useCollectionManager_deprecated,
   useGlobalTheme,
   useSchemaInitializer,
@@ -131,7 +132,7 @@ export const KanbanBlockInitializer = ({
     <DataBlockInitializer
       {...itemConfig}
       componentType={`Kanban`}
-      icon={<FormOutlined />}
+      icon={<ProjectOutlined />}
       onCreateBlockSchema={async (options) => {
         if (createBlockSchema) {
           return createBlockSchema(options);
@@ -153,10 +154,13 @@ export const useCreateKanbanBlock = () => {
   const options = useContext(SchemaOptionsContext);
   const { theme } = useGlobalTheme();
   const api = useAPIClient();
+  const app = useApp();
+  const plugin = app.pm.get('kanban') as any;
+  const groupFieldInterfaces = plugin.getGroupFieldInterface() || [];
   const createKanbanBlock = async ({ item }) => {
     const collectionFields = getCollectionFields(item.name, item.dataSource);
     const fields = collectionFields
-      ?.filter((field) => ['select', 'radioGroup'].includes(field.interface))
+      ?.filter((field) => Object.keys(groupFieldInterfaces).find((v) => v === field.interface))
       ?.map((field) => {
         return {
           label: field?.uiSchema?.title,
@@ -218,13 +222,16 @@ export function useCreateAssociationKanbanBlock() {
   const { theme } = useGlobalTheme();
   const { getCollectionFields } = useCollectionManager_deprecated();
   const api = useAPIClient();
+  const app = useApp();
 
   const createAssociationKanbanBlock = async ({ item }) => {
-    console.log(item);
     const field = item.associationField;
     const collectionFields = getCollectionFields(item.name, item.dataSource);
+    const plugin = app.pm.get('kanban') as any;
+    const groupFieldInterfaces = plugin.getGroupFieldInterface() || [];
+
     const fields = collectionFields
-      ?.filter((field) => ['select', 'radioGroup'].includes(field.interface))
+      ?.filter((field) => Object.keys(groupFieldInterfaces).find((v) => v === field.interface))
       ?.map((field) => {
         return {
           label: field?.uiSchema?.title,

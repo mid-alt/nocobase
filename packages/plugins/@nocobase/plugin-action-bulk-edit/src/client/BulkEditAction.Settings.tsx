@@ -18,6 +18,11 @@ import {
   useDesignable,
   useOpenModeContext,
   useSchemaToolbar,
+  SecondConFirm,
+  AfterSuccess,
+  RefreshDataBlockRequest,
+  SchemaSettingsLinkageRules,
+  useDataBlockProps,
 } from '@nocobase/client';
 import { ModalProps } from 'antd';
 import React from 'react';
@@ -93,6 +98,16 @@ export const deprecatedBulkEditActionSettings = new SchemaSettings({
       },
     },
     {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
       name: 'openMode',
       Component: SchemaInitializerOpenModeSchemaItems,
       useComponentProps() {
@@ -110,6 +125,16 @@ export const deprecatedBulkEditActionSettings = new SchemaSettings({
     {
       name: 'updateMode',
       Component: UpdateMode,
+    },
+    {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
     },
     {
       name: 'remove',
@@ -135,6 +160,16 @@ export const bulkEditActionSettings = new SchemaSettings({
       },
     },
     {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
       name: 'openMode',
       Component: SchemaInitializerOpenModeSchemaItems,
       useComponentProps() {
@@ -153,6 +188,60 @@ export const bulkEditActionSettings = new SchemaSettings({
     {
       name: 'updateMode',
       Component: UpdateMode,
+    },
+
+    {
+      name: 'remove',
+      sort: 100,
+      Component: RemoveButton as any,
+      useComponentProps() {
+        const { removeButtonProps } = useSchemaToolbar();
+        return removeButtonProps;
+      },
+    },
+  ],
+});
+/**
+ * 批量编辑表单的submit 按钮
+ */
+export const bulkEditFormSubmitActionSettings = new SchemaSettings({
+  name: 'actionSettings:bulkEditSubmit',
+  items: [
+    {
+      name: 'editButton',
+      Component: ActionDesigner.ButtonEditor,
+      useComponentProps() {
+        const { buttonEditorProps } = useSchemaToolbar();
+        return buttonEditorProps;
+      },
+    },
+    {
+      name: 'secondConfirmation',
+      Component: SecondConFirm,
+    },
+    {
+      name: 'afterSuccessfulSubmission',
+      Component: AfterSuccess,
+    },
+    {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
+      name: 'refreshDataBlockRequest',
+      Component: RefreshDataBlockRequest,
+      useComponentProps() {
+        return {
+          isPopupAction: true,
+        };
+      },
     },
     {
       name: 'remove',

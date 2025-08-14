@@ -52,7 +52,7 @@ export class ViewFieldInference {
     const rawFields = [];
 
     for (const [name, column] of Object.entries(columns)) {
-      const inferResult: any = { name, rawType: column.type };
+      const inferResult: any = { name, rawType: column.type, field: name };
 
       const usage = columnUsage[name];
 
@@ -115,6 +115,7 @@ export class ViewFieldInference {
         if (collectionField) {
           if (collectionField.options.interface) {
             inferResult.type = collectionField.type;
+            inferResult.interface = collectionField.options.interface;
             inferResult.source = `${collectionField.collection.name}.${collectionField.name}`;
           }
         }

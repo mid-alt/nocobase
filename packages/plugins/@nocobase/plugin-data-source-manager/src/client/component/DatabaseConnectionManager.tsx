@@ -10,26 +10,30 @@
 import { uid } from '@formily/shared';
 import {
   SchemaComponent,
+  useAPIClient,
+  useDataSourceManager,
   usePlugin,
+  useRecord,
   useResourceActionContext,
   useResourceContext,
-  useRecord,
-  useDataSourceManager,
 } from '@nocobase/client';
 import { Card } from 'antd';
-import _ from 'lodash';
-import { useTranslation } from 'react-i18next';
 import React, { useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import PluginDatabaseConnectionsClient from '../';
 import { databaseConnectionSchema } from '../schema';
+import { ThirdDataSource } from '../ThridDataSource';
 import { CreateDatabaseConnectAction } from './CreateDatabaseConnectAction';
 import { EditDatabaseConnectionAction } from './EditDatabaseConnectionAction';
 import { ViewDatabaseConnectionAction } from './ViewDatabaseConnectionAction';
-import { ThirdDataSource } from '../ThridDataSource';
+import { addDatasourceCollections } from '../hooks';
 
 export const DatabaseConnectionManagerPane = () => {
   const { t } = useTranslation();
   const plugin = usePlugin(PluginDatabaseConnectionsClient);
+  const dm = useDataSourceManager();
+  const api = useAPIClient(); // 移到组件顶层
+
   const types = [...plugin.types.keys()]
     .map((key) => {
       const type = plugin.types.get(key);
@@ -39,7 +43,6 @@ export const DatabaseConnectionManagerPane = () => {
       };
     })
     .concat([{ value: 'main', label: t('Main') }]);
-  const dm = useDataSourceManager();
 
   const reloadKeys = React.useRef<string[]>([]);
 
@@ -60,10 +63,16 @@ export const DatabaseConnectionManagerPane = () => {
     [dm],
   );
 
-  const dataSourceCreateCallback = useCallback((data: any) => {
-    dm.addDataSource(ThirdDataSource, data);
-    reloadKeys.current = [...reloadKeys.current, data.key];
-  }, []);
+  const dataSourceCreateCallback = useCallback(
+    async (data: any, collections) => {
+      if (!data.options?.addAllCollections) {
+        await addDatasourceCollections(api, data.key, { collections, dbOptions: data.options });
+      }
+      dm.addDataSource(ThirdDataSource, data);
+      reloadKeys.current = [...reloadKeys.current, data.key];
+    },
+    [api, dm],
+  );
 
   const useRefreshActionProps = () => {
     const service = useResourceActionContext();

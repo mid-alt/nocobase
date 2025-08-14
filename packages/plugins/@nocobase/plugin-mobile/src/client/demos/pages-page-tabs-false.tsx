@@ -1,7 +1,5 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { Plugin } from '@nocobase/client';
 import { mockApp } from '@nocobase/client/demo-utils';
-import { SchemaComponent, Plugin } from '@nocobase/client';
 import {
   MobilePageNavigationBar,
   MobilePageProvider,
@@ -9,9 +7,9 @@ import {
   MobileRoutesProvider,
   MobileTitleProvider,
 } from '@nocobase/plugin-mobile/client';
+import React from 'react';
 
 const Demo = () => {
-  const { pathname } = useLocation();
   return (
     <div style={{ position: 'relative' }}>
       <MobileTitleProvider title="Title">
@@ -51,7 +49,7 @@ const app = mockApp({
   },
   plugins: [DemoPlugin],
   apis: {
-    'mobileRoutes:list': {
+    'mobileRoutes:listAccessible': {
       data: [
         {
           id: 1,

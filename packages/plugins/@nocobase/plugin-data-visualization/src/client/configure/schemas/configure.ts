@@ -47,7 +47,7 @@ const getArraySchema = (fields = {}, extra = {}) => ({
   },
 });
 
-export const getConfigSchema = (general: any): ISchema => ({
+export const getConfigSchema = (general: any, enableAdvancedConfig?: boolean): ISchema => ({
   type: 'void',
   properties: {
     config: {
@@ -115,37 +115,43 @@ export const getConfigSchema = (general: any): ISchema => ({
                     general,
                   },
                 },
-                [uid()]: {
-                  type: 'void',
-                  properties: {
-                    advanced: {
-                      type: 'json',
-                      title: '{{t("JSON config")}}',
-                      'x-decorator': 'FormItem',
-                      'x-decorator-props': {
-                        extra: lang('Same properties set in the form above will be overwritten by this JSON config.'),
-                      },
-                      'x-component': 'Input.JSON',
-                      'x-component-props': {
-                        autoSize: {
-                          minRows: 3,
+                ...(enableAdvancedConfig
+                  ? {
+                      [uid()]: {
+                        type: 'void',
+                        properties: {
+                          advanced: {
+                            type: 'json',
+                            title: '{{t("JSON config")}}',
+                            'x-decorator': 'FormItem',
+                            'x-decorator-props': {
+                              extra: lang(
+                                'Same properties set in the form above will be overwritten by this JSON config.',
+                              ),
+                            },
+                            'x-component': 'Input.JSON',
+                            'x-component-props': {
+                              autoSize: {
+                                minRows: 3,
+                              },
+                              json5: true,
+                            },
+                          },
                         },
-                        json5: true,
                       },
-                    },
-                  },
-                },
-                reference: {
-                  type: 'string',
-                  'x-reactions': {
-                    dependencies: ['.chartType'],
-                    fulfill: {
-                      schema: {
-                        'x-content': '{{ getReference($deps[0]) }}',
+                      reference: {
+                        type: 'string',
+                        'x-reactions': {
+                          dependencies: ['.chartType'],
+                          fulfill: {
+                            schema: {
+                              'x-content': '{{ getReference($deps[0]) }}',
+                            },
+                          },
+                        },
                       },
-                    },
-                  },
-                },
+                    }
+                  : {}),
               },
             },
           },
@@ -418,15 +424,33 @@ export const querySchema: ISchema = {
                         order: {
                           type: 'string',
                           'x-decorator': 'FormItem',
-                          'x-component': 'Radio.Group',
+                          'x-component': 'Select',
                           'x-component-props': {
                             defaultValue: 'ASC',
-                            optionType: 'button',
-                            style: {
-                              width: '128px',
-                            },
                           },
                           enum: ['ASC', 'DESC'],
+                        },
+                        nulls: {
+                          type: 'string',
+                          'x-decorator': 'FormItem',
+                          'x-component': 'Select',
+                          'x-component-props': {
+                            defaultValue: 'default',
+                          },
+                          enum: [
+                            {
+                              label: lang('Default'),
+                              value: 'default',
+                            },
+                            {
+                              label: lang('NULLS first'),
+                              value: 'first',
+                            },
+                            {
+                              label: lang('NULLS last'),
+                              value: 'last',
+                            },
+                          ],
                         },
                       },
                       {
@@ -450,6 +474,19 @@ export const querySchema: ISchema = {
               'x-component-props': {
                 defaultValue: 2000,
                 min: 1,
+                style: {
+                  width: '100px',
+                },
+              },
+            },
+            offset: {
+              title: '{{t("Offset")}}',
+              type: 'number',
+              'x-decorator': 'FormItem',
+              'x-component': 'InputNumber',
+              'x-component-props': {
+                defaultValue: 0,
+                min: 0,
                 style: {
                   width: '100px',
                 },

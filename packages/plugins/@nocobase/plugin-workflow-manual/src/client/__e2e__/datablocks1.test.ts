@@ -96,7 +96,7 @@ test.describe('field data', () => {
     const preAggregateNodeKey = getAggregateNode.key;
 
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const preManualNodePom = new ManualNode(page, preManualNodeTitle);
     await preManualNodePom.nodeConfigure.click();
     await preManualNodePom.configureUserInterfaceButton.click();
@@ -116,7 +116,7 @@ test.describe('field data', () => {
     await page.getByLabel(`designer-schema-settings-CardItem-SimpleDesigner-${randomValue}`).hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Form' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-workflowManual:customForm:configureFields-${randomValue}"]`)
@@ -131,7 +131,7 @@ test.describe('field data', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await preManualNodePom.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     //配置Manual节点
     await preManualNodePom.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -164,36 +164,29 @@ test.describe('field data', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${preManualNodeTitle}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: preManualNodeTitle }).getByLabel('action-Action.Link-View-view-').click();
     const preManualNodeRecord = triggerNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(preManualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();
-    await page.getByLabel('action-Filter.Action-Filter-filter-users_jobs-workflow-todo').click();
-    await page.getByText('Add condition', { exact: true }).click();
-    await page.getByTestId('select-filter-field').click();
-    await page.getByRole('menuitemcheckbox', { name: 'Task right' }).click();
-    await page.getByRole('menuitemcheckbox', { name: 'Title' }).click();
-    await page.getByRole('textbox').fill(manualNodeName);
+    await page.waitForTimeout(300);
+    await page.getByLabel('action-Filter.Action-Filter-').click();
+    // await page.getByText('Add condition', { exact: true }).click();
+    // await page.getByRole('button', { name: 'Task title' }).click();
+    // await page.getByRole('menuitemcheckbox', { name: 'Task title' }).click();
+    await page.getByRole('textbox').first().fill(manualNodeName);
     await page.getByRole('button', { name: 'Submit' }).click();
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.waitForTimeout(300);
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     await expect(page.getByText(preManualNodeRecord)).toBeAttached();
     // 4、后置处理：删除工作流
     await apiDeleteWorkflow(workflowId);
@@ -270,7 +263,7 @@ test.describe('field data', () => {
     const preAggregateNodeKey = getAggregateNode.key;
 
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const preManualNodePom = new ManualNode(page, preManualNodeTitle);
     await preManualNodePom.nodeConfigure.click();
     await preManualNodePom.configureUserInterfaceButton.click();
@@ -286,7 +279,7 @@ test.describe('field data', () => {
       .hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Create record' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-form:configureFields-${preManualNodeCollectionName}"]`)
@@ -295,7 +288,7 @@ test.describe('field data', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await preManualNodePom.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     //配置Manual节点
     await preManualNodePom.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -328,36 +321,28 @@ test.describe('field data', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${preManualNodeTitle}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: preManualNodeTitle }).getByLabel('action-Action.Link-View-view-').click();
     const preManualNodeRecord = triggerNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(preManualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();
-    await page.getByLabel('action-Filter.Action-Filter-filter-users_jobs-workflow-todo').click();
-    await page.getByText('Add condition', { exact: true }).click();
-    await page.getByTestId('select-filter-field').click();
-    await page.getByRole('menuitemcheckbox', { name: 'Task right' }).click();
-    await page.getByRole('menuitemcheckbox', { name: 'Title' }).click();
-    await page.getByRole('textbox').fill(manualNodeName);
+    await page.getByLabel('action-Filter.Action-Filter-').click();
+    // await page.getByText('Add condition', { exact: true }).click();
+    // await page.getByTestId('select-filter-field').click();
+    // await page.getByRole('menuitemcheckbox', { name: 'Task title' }).click();
+    await page.getByRole('textbox').first().fill(manualNodeName);
     await page.getByRole('button', { name: 'Submit' }).click();
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.waitForTimeout(300);
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     await expect(page.getByText(preManualNodeRecord)).toBeAttached();
 
     const createNodeCollectionData = await apiGetList(preManualNodeCollectionName);
@@ -470,7 +455,7 @@ test.describe('field data', () => {
     const preAggregateNodeKey = getAggregateNode.key;
 
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const preManualNodePom = new ManualNode(page, preManualNodeTitle);
     await preManualNodePom.nodeConfigure.click();
     await preManualNodePom.configureUserInterfaceButton.click();
@@ -499,7 +484,7 @@ test.describe('field data', () => {
       .hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Update record' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-form:configureFields-${preManualNodeCollectionName}"]`)
@@ -508,7 +493,7 @@ test.describe('field data', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await preManualNodePom.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     //配置Manual节点
     await preManualNodePom.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -541,36 +526,28 @@ test.describe('field data', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${preManualNodeTitle}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: preManualNodeTitle }).getByLabel('action-Action.Link-View-view-').click();
     const preManualNodeRecord = triggerNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(preManualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();
-    await page.getByLabel('action-Filter.Action-Filter-filter-users_jobs-workflow-todo').click();
-    await page.getByText('Add condition', { exact: true }).click();
-    await page.getByTestId('select-filter-field').click();
-    await page.getByRole('menuitemcheckbox', { name: 'Task right' }).click();
-    await page.getByRole('menuitemcheckbox', { name: 'Title' }).click();
-    await page.getByRole('textbox').fill(manualNodeName);
+    await page.getByLabel('action-Filter.Action-Filter-').click();
+    // await page.getByText('Add condition', { exact: true }).click();
+    // await page.getByTestId('select-filter-field').click();
+    // await page.getByRole('menuitemcheckbox', { name: 'Task title' }).click();
+    await page.getByRole('textbox').first().fill(manualNodeName);
     await page.getByRole('button', { name: 'Submit' }).click();
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.waitForTimeout(300);
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     await expect(page.getByText(preManualNodeRecord)).toBeAttached();
     const filter = `pageSize=20&page=1&filter={"$and":[{"orgname":{"$eq":"${preManualNodeRecord}"}}]}`;
     const createNodeCollectionData = await apiFilterList(preManualNodeCollectionName, filter);

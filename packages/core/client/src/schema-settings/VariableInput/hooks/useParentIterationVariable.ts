@@ -14,6 +14,21 @@ import { useFlag } from '../../../flag-provider';
 import { useSubFormValue } from '../../../schema-component/antd/association-field/hooks';
 import { useBaseVariable } from './useBaseVariable';
 
+export const useParentObjectContext = () => {
+  const { parent } = useSubFormValue();
+  const { value: parentObjectCtx, collection: collectionOfParentObject } = parent || {};
+  const { isInSubForm, isInSubTable } = useFlag() || {};
+
+  return {
+    /** 是否显示变量 */
+    shouldDisplayParentObject: (isInSubForm || isInSubTable) && !!collectionOfParentObject,
+    /** 变量的值 */
+    parentObjectCtx,
+    collectionName: collectionOfParentObject?.name,
+    dataSource: collectionOfParentObject?.dataSource,
+  };
+};
+
 /**
  * 变量：`上级对象`
  * @param param0
@@ -32,10 +47,8 @@ export const useParentObjectVariable = ({
   targetFieldSchema?: Schema;
 } = {}) => {
   // const { getActiveFieldsName } = useFormActiveFields() || {};
-  const { parent } = useSubFormValue();
-  const { value: parentObjectCtx, collection: collectionOfParentObject } = parent || {};
-  const { isInSubForm, isInSubTable } = useFlag() || {};
   const { t } = useTranslation();
+  const { shouldDisplayParentObject, parentObjectCtx, collectionName, dataSource } = useParentObjectContext();
   const parentObjectSettings = useBaseVariable({
     collectionField,
     uiSchema: schema,
@@ -43,8 +56,9 @@ export const useParentObjectVariable = ({
     maxDepth: 4,
     name: '$nParentIteration',
     title: t('Parent object'),
-    collectionName: collectionOfParentObject?.name,
+    collectionName,
     noDisabled,
+    dataSource,
     returnFields: (fields, option) => {
       return fields;
       // const activeFieldsName = getActiveFieldsName?.('nester') || [];
@@ -58,12 +72,12 @@ export const useParentObjectVariable = ({
   });
 
   return {
-    /** 是否显示变量 */
-    shouldDisplayParentObject: (isInSubForm || isInSubTable) && !!collectionOfParentObject,
-    /** 变量的值 */
-    parentObjectCtx,
     /** 变量的配置项 */
     parentObjectSettings,
-    collectionName: collectionOfParentObject?.name,
+    /** 是否显示变量 */
+    shouldDisplayParentObject,
+    /** 变量的值 */
+    parentObjectCtx,
+    collectionName,
   };
 };

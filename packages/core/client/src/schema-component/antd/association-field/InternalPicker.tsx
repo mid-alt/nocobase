@@ -7,12 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { observer, RecursionField, useField, useFieldSchema } from '@formily/react';
+import { observer, useField, useFieldSchema } from '@formily/react';
+import { transformMultiColumnToSingleColumn } from '@nocobase/utils/client';
 import { Select, Space } from 'antd';
 import { differenceBy, unionBy } from 'lodash';
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import {
   FormProvider,
+  PopupSettingsProvider,
   RecordPickerContext,
   RecordPickerProvider,
   SchemaComponentOptions,
@@ -21,8 +23,10 @@ import {
 import {
   ClearCollectionFieldContext,
   CollectionProvider_deprecated,
+  NocoBaseRecursionField,
   RecordProvider,
   useCollectionRecordData,
+  useMobileLayout,
 } from '../../..';
 import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
 import {
@@ -34,6 +38,7 @@ import { ActionContextProvider } from '../action';
 import { useAssociationFieldContext, useFieldNames, useInsertSchema } from './hooks';
 import schema from './schema';
 import { flatData, getLabelFormatValue, useLabelUiSchema } from './util';
+import { CollectionField } from '../../../data-source/collection-field/CollectionField';
 
 export const useTableSelectorProps = () => {
   const field: any = useField();
@@ -101,11 +106,12 @@ export const InternalPicker = observer(
         return opts;
       }
       return [];
-    }, [value, fieldNames?.label]);
+    }, [value?.length, fieldNames.label]);
     const pickerProps = {
       size: 'small',
       fieldNames,
-      multiple: multiple !== false && ['o2m', 'm2m', 'mbm'].includes(collectionField?.interface),
+      multiple:
+        multiple === true ? true : multiple !== false && ['o2m', 'm2m', 'mbm'].includes(collectionField?.interface),
       association: {
         target: collectionField?.target,
       },
@@ -116,6 +122,7 @@ export const InternalPicker = observer(
       collectionField,
       currentFormCollection: collectionName,
     };
+    const { isMobileLayout } = useMobileLayout();
 
     const getValue = () => {
       if (multiple == null) return null;
@@ -123,12 +130,28 @@ export const InternalPicker = observer(
         ? value.filter(Boolean)?.map((v) => v?.[fieldNames.value])
         : value?.[fieldNames.value];
     };
+
+    const getDefaultOptions = () => {
+      if (multiple == null) return null;
+      return Array.isArray(value)
+        ? value.filter(Boolean)?.map((v) => ({
+            [fieldNames.label]: compile(v?.[fieldNames.label]),
+            [fieldNames.value]: v?.[fieldNames.value],
+          }))
+        : [{ [fieldNames.label]: compile(value?.[fieldNames.label]), [fieldNames.value]: value?.[fieldNames.value] }];
+    };
+
     const getFilter = () => {
       const targetKey = collectionField?.targetKey || 'id';
       const list = options.map((option) => option[targetKey]).filter(Boolean);
       const filter = list.length ? { $and: [{ [`${targetKey}.$ne`]: list }] } : {};
       return filter;
     };
+    useEffect(() => {
+      if (!value) {
+        setSelectedRows([]);
+      }
+    }, [value]);
     const usePickActionProps = () => {
       const { setVisible } = useActionContext();
       const { multiple, selectedRows, onChange, options, collectionField } = useContext(RecordPickerContext);
@@ -142,13 +165,25 @@ export const InternalPicker = observer(
           setVisible(false);
         },
         style: {
-          display: multiple !== false && ['o2m', 'm2m', 'mbm'].includes(collectionField?.interface) ? 'block' : 'none',
+          display: multiple === false ? 'none' : 'block',
         },
       };
     };
+    const scope = useMemo(
+      () => ({
+        usePickActionProps,
+        useTableSelectorProps,
+      }),
+      [],
+    );
+    const newSchema = useMemo(
+      () => (isMobileLayout ? transformMultiColumnToSingleColumn(fieldSchema) : fieldSchema),
+      [isMobileLayout, fieldSchema],
+    );
+
     return (
-      <>
-        <Space.Compact style={{ display: 'flex', lineHeight: '32px' }}>
+      <PopupSettingsProvider enableURL={false}>
+        <Space.Compact style={{ display: 'flex' }}>
           <div style={{ width: '100%' }}>
             <Select
               role="button"
@@ -179,7 +214,7 @@ export const InternalPicker = observer(
                   setSelectedRows(values);
                 }
               }}
-              options={options}
+              options={getDefaultOptions()}
               value={getValue()}
               open={false}
             />
@@ -188,7 +223,7 @@ export const InternalPicker = observer(
             <RecordProvider isNew record={null} parent={recordData}>
               {/* 快捷添加按钮添加的添加的是一个普通的 form 区块（非关系区块），不应该与任何字段有关联，所以在这里把字段相关的上下文给清除掉 */}
               <ClearCollectionFieldContext>
-                <RecursionField
+                <NocoBaseRecursionField
                   onlyRenderProperties
                   basePath={field.address}
                   schema={fieldSchema}
@@ -212,16 +247,11 @@ export const InternalPicker = observer(
             <CollectionProvider_deprecated name={collectionField?.target}>
               <FormProvider>
                 <TableSelectorParamsProvider params={{ filter: getFilter() }}>
-                  <SchemaComponentOptions
-                    scope={{
-                      usePickActionProps,
-                      useTableSelectorProps,
-                    }}
-                  >
-                    <RecursionField
+                  <SchemaComponentOptions scope={scope} components={{ CollectionField: CollectionField }}>
+                    <NocoBaseRecursionField
                       onlyRenderProperties
                       basePath={field.address}
-                      schema={fieldSchema}
+                      schema={newSchema}
                       filterProperties={(s) => {
                         return s['x-component'] === 'AssociationField.Selector';
                       }}
@@ -232,7 +262,7 @@ export const InternalPicker = observer(
             </CollectionProvider_deprecated>
           </RecordPickerProvider>
         </ActionContextProvider>
-      </>
+      </PopupSettingsProvider>
     );
   },
   { displayName: 'InternalPicker' },

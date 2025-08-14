@@ -26,14 +26,27 @@ export class ErrorHandler {
       message += `: ${err.cause.message}`;
     }
 
-    ctx.body = {
-      errors: [
-        {
-          message,
-          code: err.code,
-        },
-      ],
+    const errorData: { message: string; code: string; title?: string } = {
+      message,
+      code: err.code,
     };
+
+    if (err?.title) {
+      errorData.title = err.title;
+    }
+    ctx.body = {
+      errors: [errorData],
+    };
+  }
+
+  renderError(err, ctx) {
+    for (const handler of this.handlers) {
+      if (handler.guard(err)) {
+        return handler.render(err, ctx);
+      }
+    }
+
+    this.defaultHandler(err, ctx);
   }
 
   middleware() {
@@ -48,13 +61,7 @@ export class ErrorHandler {
           ctx.status = err.statusCode;
         }
 
-        for (const handler of self.handlers) {
-          if (handler.guard(err)) {
-            return handler.render(err, ctx);
-          }
-        }
-
-        self.defaultHandler(err, ctx);
+        self.renderError(err, ctx);
       }
     };
   }

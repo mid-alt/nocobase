@@ -28,7 +28,8 @@ export class CreatedAtFieldInterface extends CollectionFieldInterface {
       'x-read-pretty': true,
     },
   };
-  availableTypes = ['date'];
+  description = '{{t("Store the creation time of each record")}}';
+  availableTypes = [];
   properties = {
     ...defaultProps,
     ...dateTimeProps,

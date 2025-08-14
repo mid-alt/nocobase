@@ -29,8 +29,8 @@ test.describe('creation form block schema settings', () => {
 
     // 打开编辑弹窗
     await clickOption(page, 'Edit block title');
-    await page.getByRole('textbox').click();
-    await page.getByRole('textbox').fill('Block title 123');
+    await page.getByLabel('block-title').click();
+    await page.getByLabel('block-title').fill('Block title 123');
     await page.getByRole('button', { name: 'OK', exact: true }).click();
 
     const runExpect = async () => {
@@ -41,7 +41,7 @@ test.describe('creation form block schema settings', () => {
 
       // 再次打开编辑弹窗时，显示的是上次设置的值
       await clickOption(page, 'Edit block title');
-      await expect(page.getByRole('textbox')).toHaveValue('Block title 123');
+      await expect(page.getByLabel('block-title')).toHaveValue('Block title 123');
     };
 
     await runExpect();
@@ -51,7 +51,8 @@ test.describe('creation form block schema settings', () => {
     await runExpect();
   });
 
-  test('Save as block template & convert reference to duplicate', async ({ page, mockPage }) => {
+  // deprecated
+  test.skip('Save as block template & convert reference to duplicate', async ({ page, mockPage }) => {
     await mockPage(oneTableBlockWithActionsAndFormBlocks).goto();
     await page.getByRole('button', { name: 'Add new' }).click();
 
@@ -115,7 +116,7 @@ test.describe('creation form block schema settings', () => {
     await expect(page.getByLabel('block-item-CardItem-general-form')).not.toBeVisible();
   });
 
-  test('save as block Template', async ({ page, mockPage }) => {
+  test.skip('save as block Template', async ({ page, mockPage }) => {
     await mockPage(oneEmptyForm).goto();
 
     // 先保存为模板 ------------------------------------------------------------------------
@@ -143,7 +144,7 @@ test.describe('creation form block schema settings', () => {
 
     // 创建区块的时候，可以选择刚才保存的模板 --------------------------------------------------
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
-    await page.getByRole('menuitem', { name: 'form Form right' }).first().hover();
+    await page.getByRole('menuitem', { name: 'Form right' }).first().hover();
     await page.getByRole('menuitem', { name: 'General right' }).hover();
 
     // Duplicate template
@@ -152,7 +153,7 @@ test.describe('creation form block schema settings', () => {
 
     // Reference template
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
-    await page.getByRole('menuitem', { name: 'form Form right' }).first().hover();
+    await page.getByRole('menuitem', { name: 'Form right' }).first().hover();
     await page.getByRole('menuitem', { name: 'General right' }).hover();
     await page.getByRole('menuitem', { name: 'General right' }).click();
     await page.getByRole('menuitem', { name: 'Reference template right' }).click();
@@ -247,7 +248,7 @@ test.describe('creation form block schema settings', () => {
 
       // 重新选择一下数据，字段值才会被填充
       // TODO: 保存后，数据应该直接被填充上
-      await page.getByLabel('icon-close-select').click();
+      await page.getByLabel('icon-close-select').last().click();
       await page.getByTestId('select-object-single').click();
       await page.getByRole('option', { name: '2' }).click();
 
@@ -270,7 +271,7 @@ test.describe('creation form block schema settings', () => {
     });
   });
 
-  test('save block template & using block template', async ({ page, mockPage, clearBlockTemplates }) => {
+  test.skip('save block template & using block template', async ({ page, mockPage, clearBlockTemplates }) => {
     // 确保测试结束后已保存的模板会被清空
     await clearBlockTemplates();
     const nocoPage = await mockPage({

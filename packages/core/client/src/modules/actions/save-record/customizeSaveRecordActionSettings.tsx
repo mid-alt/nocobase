@@ -19,7 +19,6 @@ import {
   RemoveButton,
   SecondConFirm,
   SkipValidation,
-  WorkflowConfig,
 } from '../../../schema-component/antd/action/Action.Designer';
 
 /**
@@ -52,14 +51,6 @@ export const customizeSaveRecordActionSettings = new SchemaSettings({
     {
       name: 'afterSuccessfulSubmission',
       Component: AfterSuccess,
-      useVisible() {
-        const fieldSchema = useFieldSchema();
-        return isValid(fieldSchema?.['x-action-settings']?.onSuccess);
-      },
-    },
-    {
-      name: 'bindWorkflow',
-      Component: WorkflowConfig,
     },
     {
       name: 'refreshDataBlockRequest',

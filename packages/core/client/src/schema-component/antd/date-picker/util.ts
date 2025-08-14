@@ -7,11 +7,12 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { getDefaultFormat, str2moment, toGmt, toLocal } from '@nocobase/utils/client';
+import { getDefaultFormat, str2moment, toGmt, toLocal, getPickerFormat } from '@nocobase/utils/client';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { dayjsable, formatDayjsValue } from '@formily/antd-v5/esm/__builtins__';
 
-const toStringByPicker = (value, picker, timezone: 'gmt' | 'local') => {
+const toStringByPicker = (value, picker = 'date', timezone: 'gmt' | 'local') => {
   if (!dayjs.isDayjs(value)) return value;
   if (timezone === 'local') {
     const offset = new Date().getTimezoneOffset();
@@ -57,7 +58,7 @@ export interface Moment2strOptions {
 }
 
 export const moment2str = (value?: Dayjs | null, options: Moment2strOptions = {}) => {
-  const { showTime, gmt, picker, utc = true } = options;
+  const { showTime, gmt, picker = 'date', utc = true } = options;
   if (!value) {
     return value;
   }
@@ -74,43 +75,94 @@ export const moment2str = (value?: Dayjs | null, options: Moment2strOptions = {}
   return toLocalByPicker(value, picker);
 };
 
+const handleChangeOnFilter = (value, picker, showTime) => {
+  const format = showTime && picker === 'date' ? 'YYYY-MM-DD HH:mm:ss' : getPickerFormat(picker);
+  if (value) {
+    return dayjs(value).format(format);
+  }
+  return value;
+};
+export const handleDateChangeOnForm = (value, dateOnly, utc, picker, showTime, gmt) => {
+  // @ts-ignore
+  const currentTimeZone = dayjs.tz.guess();
+  const format = showTime ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD';
+  if (!value) {
+    return value;
+  }
+  if (dateOnly) {
+    return formatDayjsValue(value, 'YYYY-MM-DD');
+  }
+  if (utc) {
+    if (gmt) {
+      return toGmt(value);
+    }
+    if (picker !== 'date') {
+      return dayjs(value).startOf(picker).toISOString();
+    }
+    const formattedDate = dayjs(value).format(format);
+    // @ts-ignore
+    return dayjs(formattedDate).tz(currentTimeZone, true).toISOString();
+  }
+  if (showTime) {
+    return dayjs(value).format(format);
+  }
+  return dayjs(value).startOf(picker).format(format);
+};
+
 export const mapDatePicker = function () {
+  const isMobileMedia = isMobile();
   return (props: any) => {
-    const format = getDefaultFormat(props) as any;
+    const { dateOnly, showTime, picker = 'date', utc, gmt, underFilter } = props;
+    const format = getDefaultFormat(props);
     const onChange = props.onChange;
 
     return {
       ...props,
+      inputReadOnly: isMobileMedia,
       format: format,
       value: str2moment(props.value, props),
-      onChange: (value: Dayjs | null) => {
+      onChange: (value: Dayjs | null, dateString) => {
         if (onChange) {
-          if (!props.showTime && value) {
-            value = value.startOf('day');
+          if (underFilter) {
+            onChange(handleChangeOnFilter(value, picker, showTime));
+          } else {
+            onChange(handleDateChangeOnForm(value, dateOnly, utc, picker, showTime, gmt));
           }
-          onChange(moment2str(value, props));
         }
       },
     };
   };
 };
+export function isMobile() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
 
 export const mapRangePicker = function () {
+  const isMobileMedia = isMobile();
   return (props: any) => {
     const format = getDefaultFormat(props) as any;
     const onChange = props.onChange;
-
+    const { dateOnly, showTime, picker = 'date', utc, gmt, underFilter } = props;
     return {
       ...props,
       format: format,
       value: str2moment(props.value, props),
+      inputReadOnly: isMobileMedia,
       onChange: (value: Dayjs[]) => {
         if (onChange) {
-          onChange(
-            value
-              ? [moment2str(getRangeStart(value[0], props), props), moment2str(getRangeEnd(value[1], props), props)]
-              : [],
-          );
+          if (underFilter) {
+            onChange(
+              value
+                ? [handleChangeOnFilter(value[0], picker, showTime), handleChangeOnFilter(value[1], picker, showTime)]
+                : [],
+            );
+          } else {
+            onChange(
+              value
+                ? [moment2str(getRangeStart(value[0], props), props), moment2str(getRangeEnd(value[1], props), props)]
+                : [],
+            );
+          }
         }
       },
     } as any;
@@ -162,6 +214,7 @@ export const getDateRanges = (props?: {
       now: () => toString(dayjs()),
       today: (params?: any) => withParams(toString([getStart(0, 'day'), getEnd(0, 'day')]), params),
       yesterday: (params?: any) => withParams(toString([getStart(-1, 'day'), getEnd(-1, 'day')]), params),
+      dayBeforeYesterday: (params?: any) => withParams(toString([getStart(-2, 'day'), getEnd(-2, 'day')]), params),
       tomorrow: (params?: any) => withParams(toString([getStart(1, 'day'), getEnd(1, 'day')]), params),
       thisWeek: (params?: any) => withParams(toString([getStart(0, 'isoWeek'), getEnd(0, 'isoWeek')]), params),
       lastWeek: (params?: any) => withParams(toString([getStart(-1, 'isoWeek'), getEnd(-1, 'isoWeek')]), params),
@@ -191,6 +244,7 @@ export const getDateRanges = (props?: {
     now: () => dayjs().toISOString(),
     today: (params?: any) => withParams([getStart(0, 'day'), getEnd(0, 'day')], params),
     yesterday: (params?: any) => withParams([getStart(-1, 'day'), getEnd(-1, 'day')], params),
+    dayBeforeYesterday: (params?: any) => withParams([getStart(-2, 'day'), getEnd(-2, 'day')], params),
     tomorrow: (params?: any) => withParams([getStart(1, 'day'), getEnd(1, 'day')], params),
     thisWeek: (params?: any) => withParams([getStart(0, 'isoWeek'), getEnd(0, 'isoWeek')], params),
     lastWeek: (params?: any) => withParams([getStart(-1, 'isoWeek'), getEnd(-1, 'isoWeek')], params),
@@ -216,10 +270,39 @@ export const getDateRanges = (props?: {
   };
 };
 
+export const getDateExact = () => {
+  return {
+    nowUtc: () => dayjs().toISOString(),
+    nowLocal: () => dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    todayUtc: () => dayjs().startOf('day').utc().toISOString(),
+    todayLocal: () => dayjs().startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+    todayDate: () => dayjs().format('YYYY-MM-DD'),
+    yesterdayUtc: () => dayjs().subtract(1, 'day').startOf('day').utc().toISOString(),
+    yesterdayLocal: () => dayjs().subtract(1, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+    yesterdayDate: () => dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+    tomorrowUtc: () => dayjs().add(1, 'day').startOf('day').utc().toISOString(),
+    tomorrowLocal: () => dayjs().add(1, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+    tomorrowDate: () => dayjs().add(1, 'day').format('YYYY-MM-DD'),
+  };
+};
 function withParams(value: any[], params: { fieldOperator?: string; isParsingVariable?: boolean }) {
   if (params?.isParsingVariable && params?.fieldOperator && params.fieldOperator !== '$dateBetween') {
     return value[0];
   }
 
   return value;
+}
+
+export function inferPickerType(dateString: string, picker?): 'year' | 'month' | 'quarter' | 'date' {
+  if (/^\d{4}$/.test(dateString)) {
+    return 'year';
+  } else if (/^\d{4}-\d{2}$/.test(dateString)) {
+    return 'month';
+  } else if (/^\d{4}Q[1-4]$/.test(dateString)) {
+    return 'quarter';
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return 'date';
+  } else {
+    return picker || 'date';
+  }
 }

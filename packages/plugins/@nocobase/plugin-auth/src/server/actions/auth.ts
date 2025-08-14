@@ -13,19 +13,27 @@ import { PasswordField } from '@nocobase/database';
 import { namespace } from '../../preset';
 
 export default {
-  // lostPassword: async (ctx: Context, next: Next) => {
-  //   ctx.body = await ctx.auth.lostPassword();
-  //   await next();
-  // },
-  // resetPassword: async (ctx: Context, next: Next) => {
-  //   ctx.body = await ctx.auth.resetPassword();
-  //   await next();
-  // },
-  // getUserByResetToken: async (ctx: Context, next: Next) => {
-  //   ctx.body = await ctx.auth.getUserByResetToken();
-  //   await next();
-  // },
+  lostPassword: async (ctx: Context, next: Next) => {
+    ctx.body = await ctx.auth.lostPassword();
+    await next();
+  },
+  resetPassword: async (ctx: Context, next: Next) => {
+    ctx.body = await ctx.auth.resetPassword();
+    await next();
+  },
+  checkResetToken: async (ctx: Context, next: Next) => {
+    const { resetToken } = ctx.action.params.values;
+    ctx.body = await ctx.auth.checkResetToken(resetToken);
+    await next();
+  },
   changePassword: async (ctx: Context, next: Next) => {
+    const systemSettings = ctx.db.getRepository('systemSettings');
+    const settings = await systemSettings.findOne();
+    const enableChangePassword = settings.get('enableChangePassword');
+    if (enableChangePassword === false) {
+      ctx.throw(403, ctx.t('Password is not allowed to be changed', { ns: namespace }));
+    }
+
     const {
       values: { oldPassword, newPassword, confirmPassword },
     } = ctx.action.params;
@@ -42,7 +50,8 @@ export default {
     } else {
       key = 'email';
     }
-    const user = await ctx.db.getRepository('users').findOne({
+    const UserRepo = ctx.db.getRepository('users');
+    const user = await UserRepo.findOne({
       where: {
         [key]: currentUser[key],
       },
@@ -52,8 +61,12 @@ export default {
     if (!isValid) {
       ctx.throw(401, ctx.t('The password is incorrect, please re-enter', { ns: namespace }));
     }
-    user.password = newPassword;
-    await user.save();
+    await UserRepo.update({
+      filterByTk: user.id,
+      values: {
+        password: newPassword,
+      },
+    });
     ctx.body = currentUser;
     await next();
   },

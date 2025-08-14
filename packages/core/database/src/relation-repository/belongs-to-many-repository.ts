@@ -13,6 +13,7 @@ import { AggregateOptions, CreateOptions, DestroyOptions, TargetKey } from '../r
 import { updateAssociations, updateThroughTableValue } from '../update-associations';
 import { MultipleRelationRepository } from './multiple-relation-repository';
 import { transaction } from './relation-repository';
+
 import { AssociatedOptions, PrimaryKeyWithThroughValues } from './types';
 
 type CreateBelongsToManyOptions = CreateOptions;
@@ -21,7 +22,7 @@ export class BelongsToManyRepository extends MultipleRelationRepository {
   async aggregate(options: AggregateOptions) {
     const targetRepository = this.targetCollection.repository;
 
-    const sourceModel = await this.getSourceModel();
+    const sourceModel = await this.getSourceModel(await this.getTransaction(options));
 
     const association = this.association as any;
 

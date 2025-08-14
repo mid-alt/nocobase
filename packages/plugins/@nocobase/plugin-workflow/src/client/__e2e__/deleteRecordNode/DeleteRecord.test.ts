@@ -78,7 +78,7 @@ test('Collection event add data trigger, filter single line text field not null,
 
   //配置删除数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'destroy', exact: true }).click();
@@ -173,7 +173,7 @@ test('Collection event add data trigger, filter single line text field is trigge
 
   //配置删除数据节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'destroy', exact: true }).click();
@@ -189,6 +189,8 @@ test('Collection event add data trigger, filter single line text field is trigge
   await page.getByLabel('block-item-Filter-workflows-Filter').getByRole('button', { name: 'Select field' }).click();
   await page.getByRole('menuitemcheckbox', { name: deleteNodeFieldDisplayName.toString() }).click();
   await page.getByLabel('variable-button').click();
+  await page.getByRole('menuitemcheckbox', { name: 'Trigger variables' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Trigger variables' }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();

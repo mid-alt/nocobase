@@ -18,7 +18,7 @@ test.describe('popup router', () => {
     }).waitForInit();
     const url = await nocoPage.getUrl();
 
-    // 直接跳转到子页面，然后点击返回按钮，查看是否能返回到上一级页面
+    // Directly navigate to the subpage, then click the back button to check if it can return to the parent page
     await page.goto(
       url +
         '/popups/56tsj7l3k35/filterbytk/1/popups/bd3nizznkdw/filterbytk/member/sourceid/1/popups/1ct9qd9jlbm/filterbytk/member/sourceid/1',
@@ -36,7 +36,7 @@ test.describe('popup router', () => {
     await page.locator('.ant-drawer-mask').click();
 
     // expect to be back to the first page
-    await page.getByText('Users单层子页面Configure').hover();
+    await page.getByText('单层子页面').hover();
     await expect(
       page.getByRole('button', { name: 'designer-schema-settings-CardItem-blockSettings:table-users' }),
     ).toBeVisible();
@@ -60,7 +60,7 @@ test.describe('popup router', () => {
     await page.locator('.ant-drawer-mask').click();
 
     // expect to be back to the first page
-    await page.getByText('Users单层子页面Configure').hover();
+    await page.getByText('单层子页面').hover();
     await expect(
       page.getByRole('button', { name: 'designer-schema-settings-CardItem-blockSettings:table-users' }),
     ).toBeVisible();

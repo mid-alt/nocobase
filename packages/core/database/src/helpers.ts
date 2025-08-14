@@ -11,7 +11,11 @@
 
 import { Database, IDatabaseOptions } from './database';
 import fs from 'fs';
-import semver from 'semver';
+import { MysqlDialect } from './dialects/mysql-dialect';
+import { SqliteDialect } from './dialects/sqlite-dialect';
+import { MariadbDialect } from './dialects/mariadb-dialect';
+import { PostgresDialect } from './dialects/postgres-dialect';
+import { PoolOptions } from 'sequelize';
 
 function getEnvValue(key, defaultValue?) {
   return process.env[key] || defaultValue;
@@ -70,6 +74,29 @@ function extractSSLOptionsFromEnv() {
   });
 }
 
+function getPoolOptions(): PoolOptions {
+  const options: PoolOptions = {};
+  if (process.env.DB_POOL_MAX) {
+    options.max = Number.parseInt(process.env.DB_POOL_MAX, 10);
+  }
+  if (process.env.DB_POOL_MIN) {
+    options.min = Number.parseInt(process.env.DB_POOL_MIN, 10);
+  }
+  if (process.env.DB_POOL_IDLE) {
+    options.idle = Number.parseInt(process.env.DB_POOL_IDLE, 10);
+  }
+  if (process.env.DB_POOL_ACQUIRE) {
+    options.acquire = Number.parseInt(process.env.DB_POOL_ACQUIRE, 10);
+  }
+  if (process.env.DB_POOL_EVICT) {
+    options.evict = Number.parseInt(process.env.DB_POOL_EVICT, 10);
+  }
+  if (process.env.DB_POOL_MAX_USES) {
+    options.maxUses = Number.parseInt(process.env.DB_POOL_MAX_USES, 10) || Number.POSITIVE_INFINITY;
+  }
+  return options;
+}
+
 export async function parseDatabaseOptionsFromEnv(): Promise<IDatabaseOptions> {
   const databaseOptions: IDatabaseOptions = {
     logging: process.env.DB_LOGGING == 'on' ? customLogger : false,
@@ -84,6 +111,7 @@ export async function parseDatabaseOptionsFromEnv(): Promise<IDatabaseOptions> {
     tablePrefix: process.env.DB_TABLE_PREFIX,
     schema: process.env.DB_SCHEMA,
     underscored: process.env.DB_UNDERSCORED === 'true',
+    pool: getPoolOptions(),
   };
 
   const sslOptions = await extractSSLOptionsFromEnv();
@@ -103,55 +131,12 @@ function customLogger(queryString, queryObject) {
   }
 }
 
-const dialectVersionAccessors = {
-  sqlite: {
-    sql: 'select sqlite_version() as version',
-    get: (v: string) => v,
-    version: '3.x',
-  },
-  mysql: {
-    sql: 'select version() as version',
-    get: (v: string) => {
-      const m = /([\d+.]+)/.exec(v);
-      return m[0];
-    },
-    version: '>=8.0.17',
-  },
-  mariadb: {
-    sql: 'select version() as version',
-    get: (v: string) => {
-      const m = /([\d+.]+)/.exec(v);
-      return m[0];
-    },
-    version: '>=10.9',
-  },
-  postgres: {
-    sql: 'select version() as version',
-    get: (v: string) => {
-      const m = /([\d+.]+)/.exec(v);
-      return semver.minVersion(m[0]).version;
-    },
-    version: '>=10',
-  },
-};
-
 export async function checkDatabaseVersion(db: Database) {
-  const dialect = db.sequelize.getDialect();
-  const accessor = dialectVersionAccessors[dialect];
-  if (!accessor) {
-    throw new Error(`unsupported dialect ${dialect}`);
-  }
+  await db.dialect.checkDatabaseVersion(db);
+}
 
-  const result = await db.sequelize.query(accessor.sql, {
-    type: 'SELECT',
+export function registerDialects() {
+  [SqliteDialect, MysqlDialect, MariadbDialect, PostgresDialect].forEach((dialect) => {
+    Database.registerDialect(dialect);
   });
-
-  // @ts-ignore
-  const version = accessor.get(result?.[0]?.version);
-  const versionResult = semver.satisfies(version, accessor.version);
-  if (!versionResult) {
-    throw new Error(`to use ${dialect}, please ensure the version is ${accessor.version}`);
-  }
-
-  return true;
 }

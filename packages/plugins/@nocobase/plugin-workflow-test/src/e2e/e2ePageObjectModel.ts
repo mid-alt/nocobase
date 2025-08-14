@@ -110,14 +110,14 @@ export class ApprovalTriggerNode {
     this.page = page;
     this.node = page.getByLabel(`Trigger-${triggerName}`);
     this.nodeTitle = page.getByLabel(`Trigger-${triggerName}`).getByRole('textbox');
-    this.nodeConfigure = page.getByLabel(`Trigger-${triggerName}`).getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
-    this.dataBlocksInitiationRadio = page.getByLabel('Initiate and approve in data blocks only');
-    this.dataBlocksAndGlobalApprovalBlocksInitiationRadio = page.getByLabel(
-      'Initiate and approve in both data blocks and global approval blocks',
-    );
+    this.dataBlocksInitiationRadio = page.getByRole('radio', { name: 'Initiate in data blocks only' });
+    this.dataBlocksAndGlobalApprovalBlocksInitiationRadio = page.getByRole('radio', {
+      name: 'Initiate in both data blocks',
+    });
     this.allowedToBeWithdrawnCheckbox = page.getByLabel('Allowed to be withdrawn');
     this.goToconfigureButton = page.getByRole('button', { name: 'Go to configure' });
     this.addBlockButton = page.getByLabel(`schema-initializer-Grid-ApprovalApplyAddBlockButton-${collectionName}`);
@@ -168,10 +168,10 @@ export class ApprovalPassthroughModeNode {
     this.page = page;
     this.node = page.getByLabel(`Approval-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Approval-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Approval-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
-    this.addAssigneesButton = page.getByRole('button', { name: 'plus Add assignee' });
+    this.nodeConfigure = this.node.locator('>div').first();
+    this.addAssigneesButton = page
+      .getByLabel('block-item-ArrayItems-workflows-Assignees')
+      .getByRole('button', { name: 'plus Add' });
     this.addSelectAssigneesMenu = page.getByRole('button', { name: 'Select assignees' });
     this.addQueryAssigneesMenu = page.getByRole('button', { name: 'Query assignees' });
     this.assigneesDropDown = page.getByTestId('select-single');
@@ -179,20 +179,20 @@ export class ApprovalPassthroughModeNode {
     this.AndRadio = page.getByLabel('And', { exact: true });
     this.votingRadio = page.getByLabel('Voting', { exact: true });
     this.votingThresholdEditBox = page
-      .getByLabel('block-item-NegotiationConfig-workflows-Negotiation mode')
+      .getByLabel('block-item-Negotiation-workflows-Negotiation mode')
       .getByRole('spinbutton');
     this.parallellyRadio = page.getByLabel('Parallelly', { exact: true });
     this.sequentiallyRadio = page.getByLabel('Sequentially', { exact: true });
     this.goToconfigureButton = page.getByRole('button', { name: 'Go to configure' });
     this.addBlockButton = page.getByLabel('schema-initializer-Grid-ApprovalProcessAddBlockButton-workflows');
-    this.addDetailsMenu = page.getByRole('menuitem', { name: 'Details' });
+    this.addDetailsMenu = page.getByRole('menuitem', { name: 'Original application content' });
     this.detailsConfigureFieldsButton = page.getByLabel(
       `schema-initializer-Grid-details:configureFields-${collectionName}`,
     );
-    this.addActionsMenu = page.getByRole('menuitem', { name: 'Actions' }).getByRole('switch');
+    this.addActionsMenu = page.getByRole('menuitem', { name: 'Process form' });
     this.actionsConfigureFieldsButton = page.getByLabel('schema-initializer-Grid-FormItemInitializers-approvalRecords');
     this.actionsConfigureActionsButton = page.getByLabel(
-      'schema-initializer-ActionBar-ApprovalProcessAddActionButton-approvalRecords',
+      'schema-initializer-ActionBar-ApprovalProcessAddActionButton-',
     );
     this.addApproveButton = page.getByRole('menuitem', { name: 'Approve' }).getByRole('switch');
     this.addRejectButton = page.getByRole('menuitem', { name: 'Reject' }).getByRole('switch');
@@ -241,10 +241,10 @@ export class ApprovalBranchModeNode {
     this.page = page;
     this.node = page.getByLabel(`Approval-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Approval-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Approval-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
-    this.addAssigneesButton = page.getByRole('button', { name: 'plus Add assignee' });
+    this.nodeConfigure = this.node.locator('>div').first();
+    this.addAssigneesButton = page
+      .getByLabel('block-item-ArrayItems-workflows-Assignees')
+      .getByRole('button', { name: 'plus Add' });
     this.addSelectAssigneesMenu = page.getByRole('button', { name: 'Select assignees' });
     this.addQueryAssigneesMenu = page.getByRole('button', { name: 'Query assignees' });
     this.assigneesDropDown = page.getByTestId('select-single');
@@ -252,21 +252,19 @@ export class ApprovalBranchModeNode {
     this.AndRadio = page.getByLabel('And', { exact: true });
     this.votingRadio = page.getByLabel('Voting', { exact: true });
     this.votingThresholdEditBox = page
-      .getByLabel('block-item-NegotiationConfig-workflows-Negotiation mode')
+      .getByLabel('block-item-Negotiation-workflows-Negotiation mode')
       .getByRole('spinbutton');
     this.parallellyRadio = page.getByLabel('Parallelly', { exact: true });
     this.sequentiallyRadio = page.getByLabel('Sequentially', { exact: true });
     this.goToconfigureButton = page.getByRole('button', { name: 'Go to configure' });
     this.addBlockButton = page.getByLabel('schema-initializer-Grid-ApprovalProcessAddBlockButton-workflows');
-    this.addDetailsMenu = page.getByRole('menuitem', { name: 'Details' });
+    this.addDetailsMenu = page.getByRole('menuitem', { name: 'Original application content' });
     this.detailsConfigureFieldsButton = page.getByLabel(
       `schema-initializer-Grid-details:configureFields-${collectionName}`,
     );
-    this.addActionsMenu = page.getByRole('menuitem', { name: 'Actions' }).getByRole('switch');
+    this.addActionsMenu = page.getByRole('menuitem', { name: 'Process form' });
     this.actionsConfigureFieldsButton = page.getByLabel('schema-initializer-Grid-FormItemInitializers-approvalRecords');
-    this.actionsConfigureActionsButton = page.getByLabel(
-      'schema-initializer-ActionBar-ApprovalProcessAddActionButton-approvalRecords',
-    );
+    this.actionsConfigureActionsButton = page.getByLabel('schema-initializer-ActionBar-');
     this.addApproveButton = page.getByRole('menuitem', { name: 'Approve' }).getByRole('switch');
     this.addRejectButton = page.getByRole('menuitem', { name: 'Reject' }).getByRole('switch');
     this.addReturnButton = page.getByRole('menuitem', { name: 'Return' }).getByRole('switch');
@@ -298,9 +296,9 @@ export class ScheduleTriggerNode {
   addNodeButton: Locator;
   constructor(page: Page, triggerName: string, collectionName: string) {
     this.page = page;
-    this.node = page.getByText('TriggeraConfigure');
+    this.node = page.getByLabel(`Trigger-${triggerName}`);
     this.nodeTitle = page.locator('textarea').filter({ hasText: triggerName });
-    this.nodeConfigure = page.getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.customTimeTriggerOptions = page.getByLabel('Based on certain date');
     this.startTimeEntryBox = page.getByPlaceholder('Select date');
     this.RrpeatModeDropdown = page.getByLabel('block-item-RepeatField-workflows-Repeat mode');
@@ -330,7 +328,7 @@ export class CollectionTriggerNode {
     this.page = page;
     this.node = page.getByLabel(`Trigger-${triggerName}`);
     this.nodeTitle = page.getByLabel(`Trigger-${triggerName}`).getByRole('textbox');
-    this.nodeConfigure = page.getByLabel(`Trigger-${triggerName}`).getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     // this.collectionDropDown = page.getByRole('button', { name: 'Select collection' });
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
@@ -358,7 +356,7 @@ export class FormEventTriggerNode {
     this.page = page;
     this.node = page.getByLabel(`Trigger-${triggerName}`);
     this.nodeTitle = page.getByLabel(`Trigger-${triggerName}`).getByRole('textbox');
-    this.nodeConfigure = page.getByLabel(`Trigger-${triggerName}`).getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -383,7 +381,7 @@ export class CustomActionEventTriggerNode {
     this.page = page;
     this.node = page.getByLabel(`Trigger-${triggerName}`);
     this.nodeTitle = page.getByLabel(`Trigger-${triggerName}`).getByRole('textbox');
-    this.nodeConfigure = page.getByLabel(`Trigger-${triggerName}`).getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -408,9 +406,7 @@ export class CalculationNode {
     this.page = page;
     this.node = page.getByLabel(`Calculation-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Calculation-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Calculation-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.mathCalculationEngine = page.getByLabel('Math.js');
     this.formulaCalculationEngine = page.getByLabel('Formula.js');
     this.calculationExpression = page.getByLabel('textbox');
@@ -441,9 +437,7 @@ export class QueryRecordNode {
     this.page = page;
     this.node = page.getByLabel(`Query record-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Query record-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Query record-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -475,9 +469,7 @@ export class CreateRecordNode {
     this.page = page;
     this.node = page.getByLabel(`Create record-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Create record-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Create record-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -504,9 +496,7 @@ export class UpdateRecordNode {
     this.page = page;
     this.node = page.getByLabel(`Update record-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Update record-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Update record-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -536,9 +526,7 @@ export class DeleteRecordNode {
     this.page = page;
     this.node = page.getByLabel(`Delete record-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Delete record-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Delete record-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.collectionDropDown = page
       .getByLabel('block-item-DataSourceCollectionCascader-workflows-Collection')
       .locator('.ant-select-selection-search-input');
@@ -570,9 +558,7 @@ export class AggregateNode {
     this.page = page;
     this.node = page.getByLabel(`Aggregate-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Aggregate-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Aggregate-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.countRadio = page.getByLabel('COUNT');
     this.sumRadio = page.getByLabel('SUM', { exact: true });
     this.avgRadio = page.getByLabel('AVG', { exact: true });
@@ -587,7 +573,7 @@ export class AggregateNode {
       .getByLabel('block-item-FieldsSelect-workflows-Field to aggregate')
       .locator('.ant-select-selection-search-input');
     this.distinctCheckBox = page
-      .getByLabel('block-item-Checkbox-workflows-Distinct')
+      .getByLabel('block-item-Checkbox-workflows')
       .locator('input.ant-checkbox-input[type="checkbox"]');
     this.submitButton = page.getByLabel('action-Action-Submit-workflows');
     this.cancelButton = page.getByLabel('action-Action-Cancel-workflows');
@@ -615,9 +601,7 @@ export class ManualNode {
     this.page = page;
     this.node = page.getByLabel(`Manual-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Manual-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Manual-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.assigneesDropDown = page.getByTestId('select-single');
     this.configureUserInterfaceButton = page.getByRole('button', { name: 'Configure user interface' });
     this.addBlockButton = page.getByLabel(
@@ -650,9 +634,7 @@ export class ConditionYesNode {
     this.page = page;
     this.node = page.getByLabel(`Condition-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Condition-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Condition-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.conditionExpressionEditBox = page.getByLabel('textbox');
     // await page.getByLabel('variable-constant').first().click();
     // await page.getByLabel('variable-button').first().click();
@@ -687,9 +669,7 @@ export class ConditionBranchNode {
     this.page = page;
     this.node = page.getByLabel(`Condition-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`Condition-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`Condition-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.conditionExpressionEditBox = page.getByLabel('textbox');
     this.submitButton = page.getByLabel('action-Action-Submit-workflows');
     this.cancelButton = page.getByLabel('action-Action-Cancel-workflows');
@@ -715,9 +695,7 @@ export class SQLNode {
     this.page = page;
     this.node = page.getByLabel(`SQL action-${nodeName}`, { exact: true });
     this.nodeTitle = page.getByLabel(`SQL action-${nodeName}`, { exact: true }).getByRole('textbox');
-    this.nodeConfigure = page
-      .getByLabel(`SQL action-${nodeName}`, { exact: true })
-      .getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.sqlEditBox = page.getByLabel('block-item-WorkflowVariableRawTextArea-workflows-SQL').getByRole('textbox');
     this.submitButton = page.getByLabel('action-Action-Submit-workflows');
     this.cancelButton = page.getByLabel('action-Action-Cancel-workflows');
@@ -741,7 +719,7 @@ export class ParallelBranchNode {
     this.page = page;
     this.node = page.getByLabel(`Parallel branch-${nodeName}`, { exact: true });
     this.nodeTitle = page.locator('textarea').filter({ hasText: nodeName });
-    this.nodeConfigure = page.getByLabel(`Parallel branch-${nodeName}`).getByRole('button', { name: 'Configure' });
+    this.nodeConfigure = this.node.locator('>div').first();
     this.addBranchButton = page.getByLabel(`add-button-parallel-${nodeName}-add-branch`, { exact: true });
     this.allSucceededRadio = page.getByLabel('All succeeded', { exact: true });
     this.anySucceededRadio = page.getByLabel('Any succeeded', { exact: true });

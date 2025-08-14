@@ -7,14 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Database, mockDatabase } from '@nocobase/database';
+import { createMockDatabase, Database } from '@nocobase/database';
 import { ViewFieldInference } from '../../view/view-inference';
 
 describe('view inference', function () {
   let db: Database;
 
   beforeEach(async () => {
-    db = mockDatabase();
+    db = await createMockDatabase();
     await db.clean({ drop: true });
   });
 
@@ -127,7 +127,13 @@ describe('view inference', function () {
     });
 
     const createdAt = UserCollection.model.rawAttributes['createdAt'].field;
-    expect(inferredFields[createdAt]['type']).toBe('date');
+    expect(inferredFields[createdAt]['field']).toBeDefined();
+
+    if (db.isMySQLCompatibleDialect()) {
+      expect(inferredFields[createdAt]['type']).toBe('datetimeNoTz');
+    } else {
+      expect(inferredFields[createdAt]['type']).toBe('datetimeTz');
+    }
 
     if (db.options.dialect == 'sqlite') {
       expect(inferredFields['name']).toMatchObject({

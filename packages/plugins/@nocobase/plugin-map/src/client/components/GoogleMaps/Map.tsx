@@ -164,9 +164,9 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
     });
 
     const toCenter = useMemoizedFn((position) => {
-      if (map.current) {
-        map.current.setCenter(position);
-        map.current.setZoom(zoom);
+      if (map.current && position) {
+        map.current?.setCenter(position);
+        map.current?.setZoom(zoom);
       }
     });
 
@@ -192,7 +192,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
         }
       });
 
-      map.current.setCenter(bounds.getCenter());
+      map.current?.setCenter?.(bounds.getCenter());
     });
 
     const onFocusOverlay = () => {
@@ -316,7 +316,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
       // google maps api error
       const error = console.error;
       console.error = (err, ...args) => {
-        if (err?.includes('InvalidKeyMapError')) {
+        if (err?.includes?.('InvalidKeyMapError')) {
           setErrMessage(t('Load google maps failed, Please check the Api key and refresh the page'));
         }
         error(err, ...args);
@@ -386,7 +386,6 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
       });
     });
     const app = useApp();
-
     if (!accessKey || errMessage) {
       return (
         <Alert

@@ -28,15 +28,10 @@ const itemCss = css`
 const gridCardCss = css`
   height: 100%;
   > .ant-card-body {
-    padding: 24px 24px 0px;
     height: 100%;
-    button {
-      margin-bottom: 0px !important;
-      margin-top: 5px;
-    }
   }
   .nb-action-bar {
-    padding: 5px 0;
+    padding-top: 5px;
   }
 `;
 
@@ -45,7 +40,7 @@ export const GridCardItem = withDynamicSchemaProps(
     const field = useField<ObjectField>();
     const parentRecordData = useCollectionParentRecordData();
     return (
-      <Card role="button" aria-label="grid-card-item" className={gridCardCss}>
+      <Card bordered={false} role="button" aria-label="grid-card-item" className={gridCardCss}>
         <div className={itemCss}>
           <RecordProvider record={field.value} parent={parentRecordData}>
             {props.children}

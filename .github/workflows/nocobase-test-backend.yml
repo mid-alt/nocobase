@@ -5,35 +5,40 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches:
-      - main
-      - next
-    paths:
-      - 'package.json'
-      - '**/yarn.lock'
-      - 'packages/core/acl/**'
-      - 'packages/core/actions/**'
-      - 'packages/core/database/**'
-      - 'packages/core/resourcer/**'
-      - 'packages/core/data-source-manager/**'
-      - 'packages/core/server/**'
-      - 'packages/core/utils/**'
-      - 'packages/plugins/**/src/server/**'
-      - '.github/workflows/nocobase-test-backend.yml'
-  pull_request:
-    paths:
-      - 'package.json'
-      - '**/yarn.lock'
-      - 'packages/core/acl/**'
-      - 'packages/core/actions/**'
-      - 'packages/core/database/**'
-      - 'packages/core/resourcer/**'
-      - 'packages/core/data-source-manager/**'
-      - 'packages/core/server/**'
-      - 'packages/core/utils/**'
-      - 'packages/plugins/**/src/server/**'
-      - '.github/workflows/nocobase-test-backend.yml'
+  workflow_dispatch:
+
+  # push:
+  #   branches:
+  #     - main
+  #     - next
+  #     - develop
+  #   paths:
+  #     - 'package.json'
+  #     - '**/yarn.lock'
+  #     - 'packages/core/acl/**'
+  #     - 'packages/core/auth/**'
+  #     - 'packages/core/actions/**'
+  #     - 'packages/core/database/**'
+  #     - 'packages/core/resourcer/**'
+  #     - 'packages/core/data-source-manager/**'
+  #     - 'packages/core/server/**'
+  #     - 'packages/core/utils/**'
+  #     - 'packages/plugins/**/src/server/**'
+  #     - '.github/workflows/nocobase-test-backend.yml'
+  # pull_request:
+  #   paths:
+  #     - 'package.json'
+  #     - '**/yarn.lock'
+  #     - 'packages/core/acl/**'
+  #     - 'packages/core/auth/**'
+  #     - 'packages/core/actions/**'
+  #     - 'packages/core/database/**'
+  #     - 'packages/core/resourcer/**'
+  #     - 'packages/core/data-source-manager/**'
+  #     - 'packages/core/server/**'
+  #     - 'packages/core/utils/**'
+  #     - 'packages/plugins/**/src/server/**'
+  #     - '.github/workflows/nocobase-test-backend.yml'
 
 jobs:
   sqlite-test:
@@ -45,7 +50,7 @@ jobs:
     container: node:${{ matrix.node_version }}
     services:
       redis:
-        image: redis:latest
+        image: redis/redis-stack-server:latest
         ports:
           - 6379:6379
     steps:
@@ -56,7 +61,9 @@ jobs:
           node-version: ${{ matrix.node_version }}
           cache: 'yarn'
       - name: Install project dependencies
-        run: yarn install
+        run: |
+          yarn install
+          yarn add sqlite3 --no-save -W
       - name: Test with Sqlite
         run: yarn test --server --single-thread=false
         env:
@@ -74,6 +81,13 @@ jobs:
         underscored: [true, false]
         schema: [public, nocobase]
         collection_schema: [public, user_schema]
+        cache_redis: ['']
+        include:
+          - node_version: 20
+            underscored: true
+            schema: public
+            collection_schema: public
+            cache_redis: redis://redis:6379/0
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
     services:
@@ -92,7 +106,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       redis:
-        image: redis:latest
+        image: redis/redis-stack-server:latest
         ports:
           - 6379:6379
     steps:
@@ -124,6 +138,7 @@ jobs:
           DB_TEST_DISTRIBUTOR_PORT: 23450
           DB_TEST_PREFIX: test
           ENCRYPTION_FIELD_KEY: 1%&glK;<UA}aIxJVc53-4G(rTi0vg@J]
+          CACHE_REDIS_URL: ${{ matrix.cache_redis }}
     timeout-minutes: 60
 
   mysql-test:
@@ -141,7 +156,7 @@ jobs:
           MYSQL_DATABASE: nocobase
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
       redis:
-        image: redis:latest
+        image: redis/redis-stack-server:latest
         ports:
           - 6379:6379
     steps:
@@ -187,7 +202,7 @@ jobs:
           MARIADB_DATABASE: nocobase
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
       redis:
-        image: redis:latest
+        image: redis/redis-stack-server:latest
         ports:
           - 6379:6379
     steps:

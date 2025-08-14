@@ -7,17 +7,31 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Plugin } from '@nocobase/client';
+import { Plugin, lazy, useLazy } from '@nocobase/client';
 import { Registry } from '@nocobase/utils/client';
 import { ComponentType } from 'react';
 import { presetAuthType } from '../preset';
-import { AuthProvider } from './AuthProvider';
-import { Authenticator as AuthenticatorType } from './authenticator';
-import { Options, SignInForm, SignUpForm } from './basic';
+import type { Authenticator as AuthenticatorType } from './authenticator';
+import { authCheckMiddleware } from './interceptors';
 import { NAMESPACE } from './locale';
-import { AuthLayout, SignInPage, SignUpPage } from './pages';
-import { Authenticator } from './settings/Authenticator';
-export { AuthenticatorsContextProvider, AuthLayout } from './pages/AuthLayout';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+// import { AuthProvider } from './AuthProvider';
+const { AuthProvider } = lazy(() => import('./AuthProvider'), 'AuthProvider');
+// import { Options, SignInForm, SignUpForm } from './basic';
+const { Options, SignInForm, SignUpForm } = lazy(() => import('./basic'), 'Options', 'SignInForm', 'SignUpForm');
+// import { AuthLayout, SignInPage, SignUpPage } from './pages';
+const { AuthLayout, SignInPage, SignUpPage } = lazy(() => import('./pages'), 'AuthLayout', 'SignInPage', 'SignUpPage');
+// import { Authenticator } from './settings/Authenticator';
+const { Authenticator } = lazy(() => import('./settings/Authenticator'), 'Authenticator');
+const { TokenPolicySettings } = lazy(() => import('./settings/token-policy'), 'TokenPolicySettings');
+
+const { AuthenticatorsContextProvider, AuthLayout: ExportAuthLayout } = lazy(
+  () => import('./pages'),
+  'AuthenticatorsContextProvider',
+  'AuthLayout',
+);
+export { ExportAuthLayout as AuthLayout, AuthenticatorsContextProvider };
 
 export type AuthOptions = {
   components: Partial<{
@@ -39,8 +53,14 @@ export class PluginAuthClient extends Plugin {
     this.app.pluginSettingsManager.add(NAMESPACE, {
       icon: 'LoginOutlined',
       title: `{{t("Authentication", { ns: "${NAMESPACE}" })}}`,
+      aclSnippet: 'pm.auth',
+    });
+    this.app.pluginSettingsManager.add('auth.authenticators', {
+      icon: 'LoginOutlined',
+      title: `{{t("Authenticators", { ns: "${NAMESPACE}" })}}`,
       Component: Authenticator,
       aclSnippet: 'pm.auth.authenticators',
+      sort: 1,
     });
 
     this.router.add('auth', {
@@ -54,11 +74,21 @@ export class PluginAuthClient extends Plugin {
       path: '/signup',
       Component: 'SignUpPage',
     });
+    this.router.add('auth.forgotPassword', {
+      path: '/forgot-password',
+      Component: 'ForgotPasswordPage',
+    });
+    this.router.add('auth.resetPassword', {
+      path: '/reset-password',
+      Component: 'ResetPasswordPage',
+    });
 
     this.app.addComponents({
       AuthLayout,
       SignInPage,
       SignUpPage,
+      ForgotPasswordPage,
+      ResetPasswordPage,
     });
 
     this.app.providers.unshift([AuthProvider, {}]);
@@ -70,11 +100,35 @@ export class PluginAuthClient extends Plugin {
         AdminSettingsForm: Options,
       },
     });
+    this.app.pluginSettingsManager.add(`security.token-policy`, {
+      title: `{{t("Token policy", { ns: "${NAMESPACE}" })}}`,
+      Component: TokenPolicySettings,
+      aclSnippet: `pm.security.token-policy`,
+      icon: 'ApiOutlined',
+      sort: 0,
+    });
+    const [fulfilled, rejected] = authCheckMiddleware({ app: this.app });
+    this.app.apiClient.axios.interceptors.response['handlers'].unshift({
+      fulfilled,
+      rejected,
+      synchronous: false,
+      runWhen: null,
+    });
   }
 }
 
 export { AuthenticatorsContext, useAuthenticator } from './authenticator';
 export type { Authenticator } from './authenticator';
-export { useSignIn } from './basic';
+// export { useSignIn } from './basic';
+const useSignIn = function (name: string) {
+  const useSignIn = useLazy<typeof import('./basic').useSignIn>(() => import('./basic'), 'useSignIn');
+  return useSignIn(name);
+};
+const useRedirect = function (next = '/admin') {
+  const useRedirect = useLazy<typeof import('./basic').useRedirect>(() => import('./basic'), 'useRedirect');
+  return useRedirect(next);
+};
+
+export { useSignIn, useRedirect };
 
 export default PluginAuthClient;

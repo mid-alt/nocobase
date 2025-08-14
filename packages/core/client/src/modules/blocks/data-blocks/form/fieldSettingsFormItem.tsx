@@ -6,7 +6,7 @@
  * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
-import { ArrayCollapse, FormLayout } from '@formily/antd-v5';
+import { FormLayout } from '@formily/antd-v5';
 import { Field } from '@formily/core';
 import { ISchema, useField, useFieldSchema } from '@formily/react';
 import _ from 'lodash';
@@ -19,7 +19,7 @@ import { useCollectionManager_deprecated, useCollection_deprecated } from '../..
 import { useFieldComponentName } from '../../../../common/useFieldComponentName';
 import { useCollection } from '../../../../data-source';
 import { fieldComponentSettingsItem } from '../../../../data-source/commonsSettingsItem';
-import { useDesignable, useValidateSchema } from '../../../../schema-component';
+import { useCompile, useDesignable, useValidateSchema } from '../../../../schema-component';
 import {
   useIsFieldReadPretty,
   useIsFormReadPretty,
@@ -29,7 +29,7 @@ import { useIsAllowToSetDefaultValue } from '../../../../schema-settings/hooks/u
 import { getTempFieldState } from '../../../../schema-settings/LinkageRules/bindLinkageRulesToFiled';
 import { ActionType } from '../../../../schema-settings/LinkageRules/type';
 import { SchemaSettingsDefaultValue } from '../../../../schema-settings/SchemaSettingsDefaultValue';
-
+import { ArrayCollapse } from '../../../../schema-settings/LinkageRules/components/LinkageHeader';
 export const fieldSettingsFormItem = new SchemaSettings({
   name: 'fieldSettings:FormItem',
   items: [
@@ -43,6 +43,7 @@ export const fieldSettingsFormItem = new SchemaSettings({
           title: t('Generic properties'),
         };
       },
+
       useChildren(): any {
         return [
           {
@@ -53,6 +54,7 @@ export const fieldSettingsFormItem = new SchemaSettings({
               const { dn } = useDesignable();
               const field = useField<Field>();
               const fieldSchema = useFieldSchema();
+              const compile = useCompile();
               const { getCollectionJoinField } = useCollectionManager_deprecated();
               const { getField } = useCollection_deprecated();
               const collectionField =
@@ -75,16 +77,15 @@ export const fieldSettingsFormItem = new SchemaSettings({
                   },
                 } as ISchema,
                 onSubmit({ title }) {
-                  if (title) {
-                    field.title = title;
-                    fieldSchema.title = title;
-                    dn.emit('patch', {
-                      schema: {
-                        'x-uid': fieldSchema['x-uid'],
-                        title: fieldSchema.title,
-                      },
-                    });
-                  }
+                  const result = title.trim() === '' ? collectionField?.uiSchema?.title : title;
+                  field.title = compile(result);
+                  fieldSchema.title = result;
+                  dn.emit('patch', {
+                    schema: {
+                      'x-uid': fieldSchema['x-uid'],
+                      title: fieldSchema.title,
+                    },
+                  });
                   dn.refresh();
                 },
               };
@@ -101,7 +102,7 @@ export const fieldSettingsFormItem = new SchemaSettings({
 
               return {
                 title: t('Display title'),
-                checked: fieldSchema['x-decorator-props']?.['showTitle'] ?? true,
+                checked: field.decoratorProps.showTitle ?? true,
                 onChange(checked) {
                   fieldSchema['x-decorator-props'] = fieldSchema['x-decorator-props'] || {};
                   fieldSchema['x-decorator-props']['showTitle'] = checked;
@@ -153,7 +154,6 @@ export const fieldSettingsFormItem = new SchemaSettings({
                       description: fieldSchema.description,
                     },
                   });
-                  dn.refresh();
                 },
               };
             },
@@ -213,7 +213,7 @@ export const fieldSettingsFormItem = new SchemaSettings({
 
               return {
                 title: t('Required'),
-                checked: fieldSchema.required as boolean,
+                checked: field.required as boolean,
                 onChange(required) {
                   const schema = {
                     ['x-uid']: fieldSchema['x-uid'],
@@ -305,7 +305,6 @@ export const fieldSettingsFormItem = new SchemaSettings({
                   dn.emit('patch', {
                     schema,
                   });
-
                   dn.refresh();
                 },
               };
@@ -345,12 +344,17 @@ export const fieldSettingsFormItem = new SchemaSettings({
                         type: 'object',
                         'x-component': 'ArrayCollapse.CollapsePanel',
                         'x-component-props': {
-                          header: '{{ t("Validation rule") }}',
+                          header: t('Validation rule'),
                         },
                         properties: {
                           index: {
                             type: 'void',
                             'x-component': 'ArrayCollapse.Index',
+                            'x-component-props': {
+                              style: {
+                                lineHeight: '28px',
+                              },
+                            },
                           },
                           layout: {
                             type: 'void',

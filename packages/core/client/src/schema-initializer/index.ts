@@ -23,13 +23,18 @@ import { DestroyActionInitializer } from '../modules/actions/delete/DestroyActio
 import { DisassociateActionInitializer } from '../modules/actions/disassociate/DisassociateActionInitializer';
 import { ExpandableActionInitializer } from '../modules/actions/expand-collapse/ExpandableActionInitializer';
 import { FilterActionInitializer } from '../modules/actions/filter/FilterActionInitializer';
+import { LinkActionInitializer } from '../modules/actions/link/LinkActionInitializer';
 import { RefreshActionInitializer } from '../modules/actions/refresh/RefreshActionInitializer';
 import { CreateSubmitActionInitializer } from '../modules/actions/submit/CreateSubmitActionInitializer';
 import { UpdateSubmitActionInitializer } from '../modules/actions/submit/UpdateSubmitActionInitializer';
 import { UpdateRecordActionInitializer } from '../modules/actions/update-record/UpdateRecordActionInitializer';
-import { PopupActionInitializer } from '../modules/actions/view-edit-popup/PopupActionInitializer';
-import { LinkActionInitializer } from '../modules/actions/link/LinkActionInitializer';
+import {
+  PopupActionDecorator,
+  PopupActionInitializer,
+} from '../modules/actions/view-edit-popup/PopupActionInitializer';
 
+import { AssociateActionInitializer } from '../modules/actions/associate/AssociateActionInitializer';
+import { AssociateActionProvider } from '../modules/actions/associate/AssociateActionProvider';
 import { recordFormBlockInitializers } from '../modules/actions/view-edit-popup/RecordFormBlockInitializers';
 import { UpdateActionInitializer } from '../modules/actions/view-edit-popup/UpdateActionInitializer';
 import { ViewActionInitializer } from '../modules/actions/view-edit-popup/ViewActionInitializer';
@@ -104,6 +109,7 @@ import {
   filterFormItemInitializers,
   filterFormItemInitializers_deprecated,
 } from '../modules/blocks/filter-blocks/form/filterFormItemInitializers';
+import { DividerFormItemInitializer } from '../modules/blocks/other-blocks/divider/DividerFormItemInitializer';
 import { MarkdownBlockInitializer } from '../modules/blocks/other-blocks/markdown/MarkdownBlockInitializer';
 import { MarkdownFormItemInitializer } from '../modules/blocks/other-blocks/markdown/MarkdownFormItemInitializer';
 import {
@@ -146,6 +152,7 @@ export {
   useRecordCollectionDataSourceItems,
   useRemoveGridFormItem,
   useTableColumnInitializerFields,
+  registerInitializerMenusGenerator,
 } from './utils';
 
 export class SchemaInitializerPlugin extends Plugin {
@@ -182,6 +189,10 @@ export class SchemaInitializerPlugin extends Plugin {
       DisassociateActionInitializer,
       FilterActionInitializer,
       RefreshActionInitializer,
+      DividerFormItemInitializer,
+      AssociateActionInitializer,
+      AssociateActionProvider,
+      PopupActionDecorator,
     } as any);
 
     this.app.schemaInitializerManager.add(blockInitializers_deprecated);

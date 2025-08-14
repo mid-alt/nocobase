@@ -7,9 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { useTranslation } from 'react-i18next';
 // @ts-ignore
 import pkg from './../../package.json';
-import { useTranslation } from 'react-i18next';
 
 export function usePluginTranslation() {
   return useTranslation([pkg.name, 'client'], { nsMode: 'fallback' });
@@ -17,4 +17,9 @@ export function usePluginTranslation() {
 
 export function generatePluginTranslationTemplate(key: string) {
   return `{{t('${key}', { ns: ['${pkg.name}', 'client'], nsMode: 'fallback' })}}`;
+}
+
+export const ROUTE_NAMESPACE = 'lm-mobile-routes';
+export function useRouteTranslation() {
+  return useTranslation(ROUTE_NAMESPACE);
 }

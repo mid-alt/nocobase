@@ -9,11 +9,12 @@
 
 import { createForm } from '@formily/core';
 import { FormContext, useField, useFieldSchema } from '@formily/react';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionManager_deprecated } from '../collection-manager';
 import { withDynamicSchemaProps } from '../hoc/withDynamicSchemaProps';
-import { useTableBlockParams } from '../modules/blocks/data-blocks/table';
-import { FixedBlockWrapper, SchemaComponentOptions } from '../schema-component';
+import { useTableBlockParams } from '../modules/blocks/data-blocks/table/hooks/useTableBlockDecoratorProps';
+import { SchemaComponentOptions } from '../schema-component';
+import { TableElementRefContext } from '../schema-component/antd/table-v2/Table';
 import { BlockProvider, useBlockRequestContext } from './BlockProvider';
 import { useBlockHeightProps } from './hooks';
 /**
@@ -21,6 +22,16 @@ import { useBlockHeightProps } from './hooks';
  */
 export const TableBlockContext = createContext<any>({});
 TableBlockContext.displayName = 'TableBlockContext';
+
+const TableBlockContextBasicValue = createContext<{
+  field: any;
+  rowKey: string;
+  dragSortBy?: string;
+  childrenColumnName?: string;
+  showIndex?: boolean;
+  dragSort?: boolean;
+}>(null);
+TableBlockContextBasicValue.displayName = 'TableBlockContextBasicValue';
 
 /**
  * @internal
@@ -50,6 +61,9 @@ interface Props {
   collection?: string;
   children?: any;
   expandFlag?: boolean;
+  dragSortBy?: string;
+  association?: string;
+  enableIndexColumn?: boolean;
 }
 
 const InternalTableBlockProvider = (props: Props) => {
@@ -61,13 +75,16 @@ const InternalTableBlockProvider = (props: Props) => {
     childrenColumnName,
     expandFlag: propsExpandFlag = false,
     fieldNames,
-    ...others
+    collection,
+    association,
+    enableIndexColumn,
   } = props;
   const field: any = useField();
   const { resource, service } = useBlockRequestContext();
   const fieldSchema = useFieldSchema();
   const [expandFlag, setExpandFlag] = useState(fieldNames || propsExpandFlag ? true : false);
   const { heightProps } = useBlockHeightProps();
+  const tableElementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setExpandFlag(fieldNames || propsExpandFlag);
@@ -89,28 +106,63 @@ const InternalTableBlockProvider = (props: Props) => {
     [expandFlag],
   );
 
+  // Split from value to prevent unnecessary re-renders
+  const basicValue = useMemo(
+    () => ({
+      field,
+      rowKey,
+      childrenColumnName,
+      showIndex,
+      dragSort,
+      dragSortBy: props.dragSortBy,
+    }),
+    [field, rowKey, childrenColumnName, showIndex, dragSort, props.dragSortBy],
+  );
+
+  // Keep the original for compatibility
+  const value = useMemo(
+    () => ({
+      collection,
+      field,
+      service,
+      resource,
+      params,
+      showIndex,
+      dragSort,
+      rowKey,
+      expandFlag,
+      childrenColumnName,
+      allIncludesChildren,
+      setExpandFlag: setExpandFlagValue,
+      heightProps,
+      association,
+      enableIndexColumn,
+    }),
+    [
+      allIncludesChildren,
+      childrenColumnName,
+      collection,
+      dragSort,
+      expandFlag,
+      field,
+      heightProps,
+      params,
+      resource,
+      rowKey,
+      service,
+      setExpandFlagValue,
+      showIndex,
+      association,
+      enableIndexColumn,
+    ],
+  );
+
   return (
-    <FixedBlockWrapper>
-      <TableBlockContext.Provider
-        value={{
-          ...others,
-          field,
-          service,
-          resource,
-          params,
-          showIndex,
-          dragSort,
-          rowKey,
-          expandFlag,
-          childrenColumnName,
-          allIncludesChildren,
-          setExpandFlag: setExpandFlagValue,
-          heightProps,
-        }}
-      >
-        {props.children}
+    <TableElementRefContext.Provider value={tableElementRef}>
+      <TableBlockContext.Provider value={value}>
+        <TableBlockContextBasicValue.Provider value={basicValue}>{props.children}</TableBlockContextBasicValue.Provider>
       </TableBlockContext.Provider>
-    </FixedBlockWrapper>
+    </TableElementRefContext.Provider>
   );
 };
 
@@ -147,11 +199,14 @@ export const TableBlockProvider = withDynamicSchemaProps((props) => {
   const fieldSchema = useFieldSchema();
   const { getCollection, getCollectionField } = useCollectionManager_deprecated(props.dataSource);
   const collection = getCollection(props.collection, props.dataSource);
-  const { treeTable, pagingMode } = fieldSchema?.['x-decorator-props'] || {};
+  const { treeTable } = fieldSchema?.['x-decorator-props'] || {};
   const { params, parseVariableLoading } = useTableBlockParamsCompat(props);
-  let childrenColumnName = 'children';
+  // Prevent tables with 'children' field from automatically converting to tree-structured tables
+  let childrenColumnName = '__nochildren__';
 
   if (treeTable) {
+    childrenColumnName = 'children';
+
     if (resourceName?.includes('.')) {
       const f = getCollectionField(resourceName);
       if (f?.treeChildren) {
@@ -165,6 +220,8 @@ export const TableBlockProvider = withDynamicSchemaProps((props) => {
       }
       params['tree'] = true;
     }
+  } else {
+    childrenColumnName = '__nochildren__';
   }
   const form = useMemo(() => createForm(), [treeTable]);
 
@@ -189,4 +246,11 @@ export const TableBlockProvider = withDynamicSchemaProps((props) => {
  */
 export const useTableBlockContext = () => {
   return useContext(TableBlockContext);
+};
+
+/**
+ * @internal
+ */
+export const useTableBlockContextBasicValue = () => {
+  return useContext(TableBlockContextBasicValue);
 };

@@ -22,7 +22,10 @@ import {
   useCompile,
   useDesignable,
   useFormBlockContext,
+  SchemaSettingsLinkageRules,
+  LinkageRuleCategory,
 } from '@nocobase/client';
+import { useTranslation } from 'react-i18next';
 import { useGanttBlockContext } from './GanttBlockProvider';
 import { useGanttTranslation, useOptions } from './utils';
 
@@ -36,6 +39,19 @@ export const oldGanttSettings = new SchemaSettings({
     {
       name: 'title',
       Component: SchemaSettingsBlockTitleItem,
+    },
+    {
+      name: 'blockLinkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { name } = useCollection_deprecated();
+        const { t } = useTranslation();
+        return {
+          collectionName: name,
+          title: t('Block Linkage rules'),
+          category: LinkageRuleCategory.block,
+        };
+      },
     },
     {
       name: 'titleField',
@@ -278,6 +294,19 @@ export const ganttSettings = new SchemaSettings({
       Component: SchemaSettingsBlockTitleItem,
     },
     {
+      name: 'blockLinkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { name } = useCollection_deprecated();
+        const { t } = useTranslation();
+        return {
+          collectionName: name,
+          title: t('Block Linkage rules'),
+          category: LinkageRuleCategory.block,
+        };
+      },
+    },
+    {
       name: 'titleField',
       Component: SchemaSettingsSelectItem,
       useComponentProps() {
@@ -366,7 +395,7 @@ export const ganttSettings = new SchemaSettings({
         return {
           title: t('Start date field'),
           value: fieldNames.start,
-          options: useOptions('date'),
+          options: useOptions(['date', 'datetime', 'dateOnly', 'datetimeNoTz']),
           onChange: (start) => {
             const fieldNames = field.decoratorProps.fieldNames || {};
             fieldNames['start'] = start;
@@ -398,7 +427,7 @@ export const ganttSettings = new SchemaSettings({
         return {
           title: t('End date field'),
           value: fieldNames.end,
-          options: useOptions('date'),
+          options: useOptions(['date', 'datetime', 'dateOnly', 'datetimeNoTz']),
           onChange: (end) => {
             const fieldNames = field.decoratorProps.fieldNames || {};
             fieldNames['end'] = end;

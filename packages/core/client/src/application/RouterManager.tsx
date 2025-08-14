@@ -8,17 +8,21 @@
  */
 
 import { get, set } from 'lodash';
-import React, { ComponentType } from 'react';
+import React, { ComponentType, createContext, useContext } from 'react';
+import { matchRoutes } from 'react-router';
 import {
-  BrowserRouter,
   BrowserRouterProps,
-  HashRouter,
+  createBrowserRouter,
+  createHashRouter,
+  createMemoryRouter,
   HashRouterProps,
-  MemoryRouter,
   MemoryRouterProps,
+  Outlet,
   RouteObject,
-  useRoutes,
+  RouterProvider,
+  useRouteError,
 } from 'react-router-dom';
+import VariablesProvider from '../variables/VariablesProvider';
 import { Application } from './Application';
 import { CustomRouterContextProvider } from './CustomRouterContextProvider';
 import { BlankComponent, RouterContextCleaner } from './components';
@@ -39,6 +43,7 @@ export type RouterOptions = (HashRouterOptions | BrowserRouterOptions | MemoryRo
 export type ComponentTypeAndString<T = any> = ComponentType<T> | string;
 export interface RouteType extends Omit<RouteObject, 'children' | 'Component'> {
   Component?: ComponentTypeAndString;
+  skipAuthCheck?: boolean;
 }
 export type RenderComponentType = (Component: ComponentTypeAndString, props?: any) => React.ReactNode;
 
@@ -46,6 +51,16 @@ export class RouterManager {
   protected routes: Record<string, RouteType> = {};
   protected options: RouterOptions;
   public app: Application;
+  public router;
+  get basename() {
+    return this.router.basename;
+  }
+  get state() {
+    return this.router.state;
+  }
+  get navigate() {
+    return this.router.navigate;
+  }
 
   constructor(options: RouterOptions = {}, app: Application) {
     this.options = options;
@@ -121,37 +136,72 @@ export class RouterManager {
     this.options.basename = basename;
   }
 
+  matchRoutes(pathname: string) {
+    const routes = Object.values(this.routes);
+    // @ts-ignore
+    return matchRoutes<RouteType>(routes, pathname, this.basename);
+  }
+
+  isSkippedAuthCheckRoute(pathname: string) {
+    const matchedRoutes = this.matchRoutes(pathname);
+    return matchedRoutes.some((match) => {
+      return match?.route?.skipAuthCheck === true;
+    });
+  }
   /**
    * @internal
    */
   getRouterComponent(children?: React.ReactNode) {
     const { type = 'browser', ...opts } = this.options;
-    const Routers = {
-      hash: HashRouter,
-      browser: BrowserRouter,
-      memory: MemoryRouter,
+
+    const routerCreators = {
+      hash: createHashRouter,
+      browser: createBrowserRouter,
+      memory: createMemoryRouter,
     };
 
-    const ReactRouter = Routers[type];
     const routes = this.getRoutesTree();
 
-    const RenderRoutes = () => {
-      const element = useRoutes(routes);
-      return element;
+    const BaseLayoutContext = createContext<ComponentType>(null);
+
+    const Provider = () => {
+      const BaseLayout = useContext(BaseLayoutContext);
+      return (
+        <CustomRouterContextProvider>
+          <BaseLayout>
+            <VariablesProvider>
+              <Outlet />
+              {children}
+            </VariablesProvider>
+          </BaseLayout>
+        </CustomRouterContextProvider>
+      );
     };
+
+    // bubble up error to application error boundary
+    const ErrorElement = () => {
+      const error = useRouteError();
+      throw error;
+    };
+
+    this.router = routerCreators[type](
+      [
+        {
+          element: <Provider />,
+          errorElement: <ErrorElement />,
+          children: routes,
+        },
+      ],
+      opts,
+    );
 
     const RenderRouter: React.FC<{ BaseLayout?: ComponentType }> = ({ BaseLayout = BlankComponent }) => {
       return (
-        <RouterContextCleaner>
-          <ReactRouter {...opts}>
-            <CustomRouterContextProvider>
-              <BaseLayout>
-                <RenderRoutes />
-                {children}
-              </BaseLayout>
-            </CustomRouterContextProvider>
-          </ReactRouter>
-        </RouterContextCleaner>
+        <BaseLayoutContext.Provider value={BaseLayout}>
+          <RouterContextCleaner>
+            <RouterProvider router={this.router} />
+          </RouterContextCleaner>
+        </BaseLayoutContext.Provider>
       );
     };
 

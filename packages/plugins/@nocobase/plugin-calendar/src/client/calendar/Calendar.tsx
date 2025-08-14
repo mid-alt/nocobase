@@ -8,36 +8,58 @@
  */
 
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { RecursionField, Schema, observer, useFieldSchema } from '@formily/react';
+import { Schema, useField, useFieldSchema } from '@formily/react';
 import {
+  ActionContextProvider,
+  CollectionProvider,
+  NocoBaseRecursionField,
   PopupContextProvider,
   RecordProvider,
+  SchemaComponentOptions,
   getLabelFormatValue,
+  handleDateChangeOnForm,
+  useACLRoleContext,
+  useActionContext,
+  useApp,
   useCollection,
   useCollectionParentRecordData,
+  useDesignable,
+  useFormBlockContext,
+  useLazy,
   usePopupUtils,
   useProps,
   withDynamicSchemaProps,
+  withSkeletonComponent,
 } from '@nocobase/client';
-import { parseExpression } from 'cron-parser';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import get from 'lodash/get';
-import React, { useMemo, useState } from 'react';
-import { Calendar as BigCalendar, View, dayjsLocalizer } from 'react-big-calendar';
-import * as dates from 'react-big-calendar/lib/utils/dates';
+import { cloneDeep, get, omit } from 'lodash';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View } from 'react-big-calendar';
 import { i18nt, useTranslation } from '../../locale';
 import { CalendarRecordViewer, findEventSchema } from './CalendarRecordViewer';
 import Header from './components/Header';
 import { CalendarToolbarContext } from './context';
 import GlobalStyle from './global.style';
 import { useCalenderHeight } from './hook';
+import { addNew } from './schema';
 import useStyle from './style';
 import type { ToolbarProps } from './types';
 import { formatDate } from './utils';
+import updateLocale from 'dayjs/plugin/updateLocale';
+import { dateFnsLocalizer } from 'react-big-calendar';
+import { format, parse, startOfWeek, getDay } from 'date-fns';
+import enUS from 'date-fns/locale/en-US';
+
+interface Event {
+  id: string;
+  colorFieldValue: string;
+  title: string;
+  start: Date;
+  end: Date;
+}
 
 const Weeks = ['month', 'week', 'day'] as View[];
-const localizer = dayjsLocalizer(dayjs);
 
 export const DeleteEventContext = React.createContext({
   close: () => {},
@@ -58,18 +80,37 @@ function Toolbar(props: ToolbarProps) {
   );
   return (
     <CalendarToolbarContext.Provider value={props}>
-      <RecursionField name={toolBarSchema.name} schema={toolBarSchema} />
+      <NocoBaseRecursionField name={toolBarSchema.name} schema={toolBarSchema} />
     </CalendarToolbarContext.Provider>
   );
 }
 
-const useEvents = (dataSource: any, fieldNames: any, date: Date, view: (typeof Weeks)[number]) => {
+const useEvents = (
+  dataSource: any,
+  fieldNames: {
+    colorFieldName: string;
+    start: string;
+    end: string;
+    id: string;
+    title: string;
+  },
+  date: Date,
+  view: (typeof Weeks)[number] | any = 'month',
+) => {
+  const parseExpression = useLazy<typeof import('cron-parser').parseExpression>(
+    () => import('cron-parser'),
+    'parseExpression',
+  );
   const { t } = useTranslation();
   const { fields } = useCollection();
+  const app = useApp();
+  const plugin = app.pm.get('calendar') as any;
   const labelUiSchema = fields.find((v) => v.name === fieldNames?.title)?.uiSchema;
+  const enumUiSchema = fields.find((v) => v.name === fieldNames?.colorFieldName);
   return useMemo(() => {
-    if (!Array.isArray(dataSource)) return [];
-    const events = [];
+    if (!Array.isArray(dataSource)) return { events: [], enumList: [] };
+    const enumList = enumUiSchema?.uiSchema?.enum || [];
+    const events: Event[] = [];
 
     dataSource.forEach((item) => {
       const { cron, exclude = [] } = item;
@@ -78,8 +119,8 @@ const useEvents = (dataSource: any, fieldNames: any, date: Date, view: (typeof W
       const intervalTime = end.diff(start, 'millisecond', true);
 
       const dateM = dayjs(date);
-      let startDate = dateM.clone().startOf('month');
-      let endDate = startDate.clone().endOf('month');
+      const startDate = dateM.clone().startOf(view);
+      const endDate = startDate.clone().endOf(view);
 
       /**
        * view === month 时，会显示当月日程
@@ -87,17 +128,19 @@ const useEvents = (dataSource: any, fieldNames: any, date: Date, view: (typeof W
        * 假设 10.1 号是星期六，我们需要将日程的开始时间调整为这一周的星期一，也就是 9.25 号
        * 而结束时间需要调整为 10.31 号这一周的星期日，也就是 10.5 号
        */
-      if (view === 'month') {
-        startDate = startDate.startOf('week');
-        endDate = endDate.endOf('week');
-      }
+      // if (view === 'month') {
+      //   startDate = startDate.startOf('week');
+      //   endDate = endDate.endOf('week');
+      // }
 
       const push = (eventStart: Dayjs = start.clone()) => {
         // 必须在这个月的开始时间和结束时间，且在日程的开始时间之后
-        if (eventStart.isBefore(start)) {
+        if (
+          eventStart.isBefore(start) || // 开始时间早于 start
+          (!eventStart.isBetween(startDate, endDate, null, '[]') && !end.isBetween(startDate, endDate)) // 开始时间和结束时间不在月份范围内
+        ) {
           return;
         }
-
         let out = false;
         const res = exclude?.some((d) => {
           if (d.endsWith('_after')) {
@@ -108,13 +151,24 @@ const useEvents = (dataSource: any, fieldNames: any, date: Date, view: (typeof W
             return eventStart.isSame(d);
           }
         });
+
         if (res) return out;
-        const title = getLabelFormatValue(labelUiSchema, get(item, fieldNames.title), true);
-        const event = {
+        const targetTitleCollectionField = fields.find((v) => v.name === fieldNames.title);
+        const targetTitle = plugin.getTitleFieldInterface(targetTitleCollectionField.interface);
+        const title = getLabelFormatValue(
+          labelUiSchema,
+          get(item, fieldNames.title),
+          true,
+          targetTitleCollectionField,
+          targetTitle?.TitleRenderer,
+        );
+        const event: Event | any = {
           id: get(item, fieldNames.id || 'id'),
+          colorFieldValue: item[fieldNames.colorFieldName],
           title: title || t('Untitle'),
           start: eventStart.toDate(),
           end: eventStart.add(intervalTime, 'millisecond').toDate(),
+          rawTitle: get(item, fieldNames.title),
         };
 
         events.push(event);
@@ -157,28 +211,101 @@ const useEvents = (dataSource: any, fieldNames: any, date: Date, view: (typeof W
         }
       }
     });
-    return events;
-  }, [dataSource, fieldNames.start, fieldNames.end, fieldNames.id, fieldNames.title, date, view, t]);
+    return { events, enumList };
+  }, [
+    labelUiSchema,
+    dataSource,
+    fieldNames.colorFieldName,
+    fieldNames.start,
+    fieldNames.end,
+    fieldNames.id,
+    fieldNames.title,
+    date,
+    view,
+    t,
+    enumUiSchema?.uiSchema?.enum,
+    parseExpression,
+  ]);
+};
+
+const useInsertSchema = (component) => {
+  const fieldSchema = useFieldSchema();
+  const { insertAfterBegin } = useDesignable();
+  const insert = useCallback(
+    (ss) => {
+      const schema = fieldSchema.reduceProperties((buf, s) => {
+        if (s['x-component'] === 'AssociationField.' + component) {
+          return s;
+        }
+        return buf;
+      }, null);
+      if (!schema) {
+        insertAfterBegin(cloneDeep(ss));
+      }
+    },
+    [component, fieldSchema, insertAfterBegin],
+  );
+  return insert;
 };
 
 export const Calendar: any = withDynamicSchemaProps(
-  observer(
+  withSkeletonComponent(
     (props: any) => {
       const [visible, setVisible] = useState(false);
       const { openPopup } = usePopupUtils({
         setVisible,
       });
+      const reactBigCalendar = useLazy(
+        () => import('react-big-calendar'),
+        (module) => ({
+          BigCalendar: module.Calendar,
+          dayjsLocalizer: module.dayjsLocalizer,
+        }),
+      );
 
+      const eq = useLazy<typeof import('react-big-calendar/lib/utils/dates').eq>(
+        () => import('react-big-calendar/lib/utils/dates'),
+        'eq',
+      );
+
+      const localizer = useMemo(() => {
+        return dateFnsLocalizer({
+          format,
+          parse,
+          startOfWeek: (date) => {
+            return startOfWeek(date, { locale: { options: { weekStartsOn: props.weekStart || '1' } } });
+          },
+          getDay,
+          locales: { 'en-US': enUS },
+        });
+      }, [props.weekStart]);
       // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
-      const { dataSource, fieldNames, showLunar } = useProps(props);
+      const { dataSource, fieldNames, showLunar, getFontColor, getBackgroundColor, enableQuickCreateEvent } =
+        useProps(props);
       const height = useCalenderHeight();
       const [date, setDate] = useState<Date>(new Date());
-      const [view, setView] = useState<View>('month');
-      const events = useEvents(dataSource, fieldNames, date, view);
+      const [view, setView] = useState<View>(props.defaultView || 'month');
+      const { events, enumList } = useEvents(dataSource, fieldNames, date, view);
       const [record, setRecord] = useState<any>({});
       const { wrapSSR, hashId, componentCls: containerClassName } = useStyle();
       const parentRecordData = useCollectionParentRecordData();
       const fieldSchema = useFieldSchema();
+      const field = useField();
+      //nint deal with slot select to show create popup
+      const { parseAction } = useACLRoleContext();
+      const collection = useCollection();
+      const canCreate = parseAction(`${collection.name}:create`);
+      const startFieldName = fieldNames?.start?.[0];
+      const endFieldName = fieldNames?.end?.[0];
+      const insertAddNewer = useInsertSchema('AddNewer');
+      const ctx = useActionContext();
+      const [visibleAddNewer, setVisibleAddNewer] = useState(false);
+      const [currentSelectDate, setCurrentSelectDate] = useState(undefined);
+      const colorCollectionField = collection.getField(fieldNames.colorFieldName);
+
+      useEffect(() => {
+        setView(props.defaultView);
+      }, [props.defaultView]);
 
       const components = useMemo(() => {
         return {
@@ -216,6 +343,75 @@ export const Calendar: any = withDynamicSchemaProps(
         noEventsInRange: i18nt('None'),
         showMore: (count) => i18nt('{{count}} more items', { count }),
       };
+
+      const eventPropGetter = (event: Event) => {
+        if (event.colorFieldValue) {
+          const fontColor = getFontColor?.(event.colorFieldValue);
+          const backgroundColor = getBackgroundColor?.(event.colorFieldValue);
+          const style = {};
+          if (fontColor) {
+            style['color'] = fontColor;
+          }
+          if (backgroundColor) {
+            style['backgroundColor'] = backgroundColor;
+          }
+          return {
+            style,
+          };
+        }
+      };
+      // 快速创建行程
+      const useCreateFormBlockProps = () => {
+        const ctx = useFormBlockContext();
+        let startDateValue = currentSelectDate.start;
+        let endDataValue = currentSelectDate.end;
+        const startCollectionField = collection.getField(startFieldName);
+        const endCollectionField = collection.getField(endFieldName);
+
+        useEffect(() => {
+          const form = ctx.form;
+          if (!form || ctx.service?.loading) {
+            return;
+          }
+          if (currentSelectDate) {
+            const startFieldProps = {
+              ...startCollectionField?.uiSchema?.['x-component-props'],
+              ...ctx.form?.query(startFieldName).take()?.componentProps,
+            };
+            const endFieldProps = {
+              ...endCollectionField?.uiSchema?.['x-component-props'],
+              ...ctx.form?.query(endFieldName).take()?.componentProps,
+            };
+
+            startDateValue = handleDateChangeOnForm(
+              currentSelectDate.start,
+              startFieldProps.dateOnly,
+              startFieldProps.utc,
+              startFieldProps.picker,
+              startFieldProps.showTime,
+              startFieldProps.gtm,
+            );
+            endDataValue = handleDateChangeOnForm(
+              currentSelectDate.end,
+              endFieldProps.dateOnly,
+              endFieldProps.utc,
+              endFieldProps.picker,
+              endFieldProps.showTime,
+              endFieldProps.gtm,
+            );
+            if (!form.initialValues[startFieldName]) {
+              form.setInitialValuesIn([startFieldName], startDateValue);
+            }
+            if (!form.initialValues[endFieldName]) {
+              form.setInitialValuesIn([endFieldName], endDataValue);
+            }
+          }
+        }, [ctx.form, ctx.service?.data?.data, ctx.service?.loading]);
+        return {
+          form: ctx.form,
+        };
+      };
+      const BigCalendar = reactBigCalendar?.BigCalendar;
       return wrapSSR(
         <div className={`${hashId} ${containerClassName}`} style={{ height: height || 700 }}>
           <PopupContextProvider visible={visible} setVisible={setVisible}>
@@ -227,6 +423,7 @@ export const Calendar: any = withDynamicSchemaProps(
               popup
               selectable
               events={events}
+              eventPropGetter={eventPropGetter}
               view={view}
               views={Weeks}
               date={date}
@@ -236,7 +433,11 @@ export const Calendar: any = withDynamicSchemaProps(
               onNavigate={setDate}
               onView={setView}
               onSelectSlot={(slotInfo) => {
-                console.log('onSelectSlot', slotInfo);
+                setCurrentSelectDate(slotInfo);
+                if (canCreate && enableQuickCreateEvent) {
+                  insertAddNewer(addNew);
+                  setVisibleAddNewer(true);
+                }
               }}
               onDoubleClickEvent={() => {
                 console.log('onDoubleClickEvent');
@@ -246,7 +447,11 @@ export const Calendar: any = withDynamicSchemaProps(
                 if (!record) {
                   return;
                 }
-                record.__event = { ...event, start: formatDate(dayjs(event.start)), end: formatDate(dayjs(event.end)) };
+                record.__event = {
+                  ...omit(event, 'title'),
+                  start: formatDate(dayjs(event.start)),
+                  end: formatDate(dayjs(event.end)),
+                };
 
                 setRecord(record);
                 openPopup({
@@ -255,20 +460,44 @@ export const Calendar: any = withDynamicSchemaProps(
                 });
               }}
               formats={{
-                monthHeaderFormat: 'YYYY-M',
-                agendaDateFormat: 'M-DD',
-                dayHeaderFormat: 'YYYY-M-DD',
+                monthHeaderFormat: 'yyyy-M',
+                agendaDateFormat: 'M-dd',
+                dayHeaderFormat: 'yyyy-M-dd',
                 dayRangeHeaderFormat: ({ start, end }, culture, local) => {
-                  if (dates.eq(start, end, 'month')) {
-                    return local.format(start, 'YYYY-M', culture);
+                  if (eq(start, end, 'month')) {
+                    return local.format(start, 'yyyy-M', culture);
                   }
-                  return `${local.format(start, 'YYYY-M', culture)} - ${local.format(end, 'YYYY-M', culture)}`;
+                  return `${local.format(start, 'yyyy-M', culture)} - ${local.format(end, 'yyyy-M', culture)}`;
                 },
               }}
               components={components}
               localizer={localizer}
+              tooltipAccessor={(val) => {
+                return val.rawTitle ? val.rawTitle : '';
+              }}
             />
           </PopupContextProvider>
+          <ActionContextProvider
+            value={{
+              ...ctx,
+              visible: visibleAddNewer,
+              setVisible: setVisibleAddNewer,
+              openMode: findEventSchema(fieldSchema)?.['x-component-props']?.['openMode'],
+            }}
+          >
+            <CollectionProvider name={collection.name}>
+              <SchemaComponentOptions scope={{ useCreateFormBlockProps }}>
+                <NocoBaseRecursionField
+                  onlyRenderProperties
+                  basePath={field?.address}
+                  schema={fieldSchema}
+                  filterProperties={(s) => {
+                    return s['x-component'] === 'AssociationField.AddNewer';
+                  }}
+                />
+              </SchemaComponentOptions>
+            </CollectionProvider>
+          </ActionContextProvider>
         </div>,
       );
     },

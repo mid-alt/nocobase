@@ -141,7 +141,7 @@ export class FormulaFieldInterface extends CollectionFieldInterface {
         [],
       ),
       required: true,
-      default: 'math.js',
+      default: 'formula.js',
     },
     expression: {
       type: 'string',
@@ -150,31 +150,6 @@ export class FormulaFieldInterface extends CollectionFieldInterface {
       'x-component': 'Formula.Expression',
       'x-decorator': 'FormItem',
       'x-component-props': {
-        supports: [
-          'checkbox',
-
-          'number',
-          'percent',
-          'integer',
-          'number',
-          'percent',
-
-          'input',
-          'textarea',
-          'email',
-          'phone',
-
-          'datetime',
-          'createdAt',
-          'updatedAt',
-
-          'radioGroup',
-          'checkboxGroup',
-          'select',
-          'multipleSelect',
-
-          // 'json'
-        ],
         useCurrentFields: '{{ useCurrentFields }}',
         // evaluate(exp: string) {
         //   const { values } = useForm();
@@ -190,17 +165,17 @@ export class FormulaFieldInterface extends CollectionFieldInterface {
           },
         },
       },
-      ['x-validator'](value, rules, { form }) {
-        const { values } = form;
-        const { evaluate } = (evaluators as Registry<Evaluator>).get(values.engine);
-        const exp = value.trim().replace(/{{\s*([^{}]+)\s*}}/g, '1');
-        try {
-          evaluate(exp);
-          return '';
-        } catch (e) {
-          return i18n.t('Expression syntax error', { ns: NAMESPACE });
-        }
-      },
+      // ['x-validator'](value, rules, { form }) {
+      //   const { values } = form;
+      //   const { evaluate } = (evaluators as Registry<Evaluator>).get(values.engine);
+      //   const exp = value.trim().replace(/{{\s*([^{}]+)\s*}}/g, '1');
+      //   try {
+      //     evaluate(exp);
+      //     return '';
+      //   } catch (e) {
+      //     return i18n.t('Expression syntax error', { ns: NAMESPACE });
+      //   }
+      // },
     },
   };
   filterable = {

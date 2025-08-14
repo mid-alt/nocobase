@@ -7,13 +7,13 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Checkbox, message, Table } from 'antd';
+import { Checkbox, message, Table, TableProps } from 'antd';
 import { uniq } from 'lodash';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient, useRequest } from '../../api-client';
 import { useRecord } from '../../record-provider';
-import { useStyles } from '../style';
+import { antTableCell } from '../style';
 import { useMenuItems } from './MenuItemsProvider';
 
 const findUids = (items) => {
@@ -49,7 +49,6 @@ const getChildrenUids = (data = [], arr = []) => {
 };
 
 export const MenuConfigure = () => {
-  const { styles } = useStyles();
   const record = useRecord();
   const api = useAPIClient();
   const { items } = useMenuItems();
@@ -115,47 +114,49 @@ export const MenuConfigure = () => {
 
   return (
     <Table
-      className={styles}
+      className={antTableCell}
       loading={loading}
       rowKey={'uid'}
       pagination={false}
       expandable={{
         defaultExpandAllRows: true,
       }}
-      columns={[
-        {
-          dataIndex: 'title',
-          title: t('Menu item title'),
-        },
-        {
-          dataIndex: 'accessible',
-          title: (
-            <>
-              <Checkbox
-                checked={allChecked}
-                onChange={async (value) => {
-                  if (allChecked) {
-                    await resource.set({
-                      values: [],
-                    });
-                  } else {
-                    await resource.set({
-                      values: allUids,
-                    });
-                  }
-                  refresh();
-                  message.success(t('Saved successfully'));
-                }}
-              />{' '}
-              {t('Accessible')}
-            </>
-          ),
-          render: (_, schema) => {
-            const checked = uids.includes(schema.uid);
-            return <Checkbox checked={checked} onChange={() => handleChange(checked, schema)} />;
+      columns={
+        [
+          {
+            dataIndex: 'title',
+            title: t('Menu item title'),
           },
-        },
-      ]}
+          {
+            dataIndex: 'accessible',
+            title: (
+              <>
+                <Checkbox
+                  checked={allChecked}
+                  onChange={async (value) => {
+                    if (allChecked) {
+                      await resource.set({
+                        values: [],
+                      });
+                    } else {
+                      await resource.set({
+                        values: allUids,
+                      });
+                    }
+                    refresh();
+                    message.success(t('Saved successfully'));
+                  }}
+                />{' '}
+                {t('Accessible')}
+              </>
+            ),
+            render: (_, schema: { uid: string }) => {
+              const checked = uids.includes(schema.uid);
+              return <Checkbox checked={checked} onChange={() => handleChange(checked, schema)} />;
+            },
+          },
+        ] as TableProps['columns']
+      }
       dataSource={translateTitle(items)}
     />
   );

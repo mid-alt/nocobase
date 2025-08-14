@@ -7,13 +7,15 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { RecursionField, observer, useField, useFieldSchema } from '@formily/react';
+import { observer, useField, useFieldSchema } from '@formily/react';
 import React, { useState } from 'react';
 import { CollectionProvider_deprecated, useCollectionManager_deprecated } from '../../../../collection-manager';
+import { NocoBaseRecursionField } from '../../../../formily/NocoBaseRecursionField';
 import { CreateAction } from '../../../../schema-initializer/components';
 import { ActionContextProvider, useActionContext } from '../../action';
 import { useAssociationFieldContext, useInsertSchema } from '../hooks';
 import schema from '../schema';
+import { TabsContextProvider } from '../../tabs/context';
 
 export const CreateRecordAction = observer(
   (props) => {
@@ -27,6 +29,8 @@ export const CreateRecordAction = observer(
     const targetCollection = getCollection(collectionField?.target);
     const [currentCollection, setCurrentCollection] = useState(targetCollection?.name);
     const [currentDataSource, setCurrentDataSource] = useState(targetCollection?.dataSource);
+    const [formValueChanged, setFormValueChanged] = useState(false);
+
     const addbuttonClick = (collectionData) => {
       insertAddNewer(schema.AddNewer);
       setVisibleAddNewer(true);
@@ -36,16 +40,26 @@ export const CreateRecordAction = observer(
     return (
       <CollectionProvider_deprecated name={collectionField?.target}>
         <CreateAction {...props} onClick={(arg) => addbuttonClick(arg)} />
-        <ActionContextProvider value={{ ...ctx, visible: visibleAddNewer, setVisible: setVisibleAddNewer }}>
+        <ActionContextProvider
+          value={{
+            ...ctx,
+            visible: visibleAddNewer,
+            setVisible: setVisibleAddNewer,
+            formValueChanged,
+            setFormValueChanged,
+          }}
+        >
           <CollectionProvider_deprecated name={currentCollection} dataSource={currentDataSource}>
-            <RecursionField
-              onlyRenderProperties
-              basePath={field.address}
-              schema={fieldSchema}
-              filterProperties={(s) => {
-                return s['x-component'] === 'AssociationField.AddNewer';
-              }}
-            />
+            <TabsContextProvider>
+              <NocoBaseRecursionField
+                onlyRenderProperties
+                basePath={field.address}
+                schema={fieldSchema}
+                filterProperties={(s) => {
+                  return s['x-component'] === 'AssociationField.AddNewer';
+                }}
+              />
+            </TabsContextProvider>
           </CollectionProvider_deprecated>
         </ActionContextProvider>
       </CollectionProvider_deprecated>

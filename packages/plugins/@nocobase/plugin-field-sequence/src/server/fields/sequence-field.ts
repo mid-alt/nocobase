@@ -50,6 +50,29 @@ export interface Pattern {
 
 export const sequencePatterns = new Registry<Pattern>();
 
+function parseBigInt(str, radix = 10) {
+  if (typeof str !== 'string') throw new TypeError('Input must be a string');
+  if (typeof radix !== 'number' || radix < 2 || radix > 36) throw new RangeError('Radix must be between 2 and 36');
+
+  let negative = false;
+  if (str.startsWith('-')) {
+    negative = true;
+    str = str.slice(1);
+  }
+
+  const chars = str.toLowerCase();
+  const digits = '0123456789abcdefghijklmnopqrstuvwxyz';
+
+  let result = 0n;
+  for (const ch of chars) {
+    const value = BigInt(digits.indexOf(ch));
+    if (value < 0n || value >= BigInt(radix)) throw new SyntaxError(`Invalid digit "${ch}" for base ${radix}`);
+    result = result * BigInt(radix) + value;
+  }
+
+  return negative ? -result : result;
+}
+
 sequencePatterns.register('string', {
   validate(options) {
     if (!options?.value) {
@@ -101,8 +124,9 @@ sequencePatterns.register('integer', {
 
     let next = start;
     if (lastSeq.get('current') != null) {
-      next = Math.max(lastSeq.get('current') + 1, start);
-      const max = Math.pow(base, digits) - 1;
+      const bn = BigInt(lastSeq.get('current')) + 1n;
+      next = bn > start ? bn : start;
+      const max = BigInt(base) ** BigInt(digits) - 1n;
       if (next > max) {
         next = start;
       }
@@ -172,7 +196,7 @@ sequencePatterns.register('integer', {
               lastGeneratedAt: recordTime,
             });
           } else {
-            if (number > lastSeq.get('current')) {
+            if (number > BigInt(lastSeq.get('current'))) {
               lastSeq.set({
                 current: number,
                 lastGeneratedAt: recordTime,
@@ -223,7 +247,7 @@ sequencePatterns.register('integer', {
       },
       transaction,
     });
-    const current = Number.parseInt(value, base);
+    const current = parseBigInt(value, base);
     if (!lastSeq) {
       return SeqRepo.create({
         values: {
@@ -292,6 +316,81 @@ sequencePatterns.register('date', {
   },
   getMatcher(options = {}) {
     return `.{${options?.format?.length ?? 8}}`;
+  },
+});
+
+// 字符集常量定义
+const CHAR_SETS = {
+  number: '0123456789',
+  lowercase: 'abcdefghijklmnopqrstuvwxyz',
+  uppercase: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  // 符号只保留常用且安全的符号，有需要的可以自己加比如[]{}|;:,.<>放在链接或者文件名里容易出问题的字符
+  symbol: '!@#$%^&*_-+',
+} as const;
+
+interface RandomCharOptions {
+  length?: number;
+  charsets?: Array<keyof typeof CHAR_SETS>;
+}
+
+sequencePatterns.register('randomChar', {
+  validate(options?: RandomCharOptions) {
+    if (!options?.length || options.length < 1) {
+      return 'options.length should be configured as a positive integer';
+    }
+    if (!options?.charsets || options.charsets.length === 0) {
+      return 'At least one character set should be selected';
+    }
+    if (options.charsets.some((charset) => !CHAR_SETS[charset])) {
+      return 'Invalid charset selected';
+    }
+    return null;
+  },
+
+  generate(instance: any, options: RandomCharOptions) {
+    const { length = 6, charsets = ['number'] } = options;
+
+    const chars = [...new Set(charsets.reduce((acc, charset) => acc + CHAR_SETS[charset], ''))];
+
+    const getRandomChar = () => {
+      const randomIndex = Math.floor(Math.random() * chars.length);
+      return chars[randomIndex];
+    };
+
+    return Array.from({ length }, () => getRandomChar()).join('');
+  },
+
+  batchGenerate(instances: any[], values: string[], options: RandomCharOptions) {
+    instances.forEach((instance, i) => {
+      values[i] = sequencePatterns.get('randomChar').generate.call(this, instance, options);
+    });
+  },
+
+  getLength(options: RandomCharOptions) {
+    return options.length || 6;
+  },
+
+  getMatcher(options: RandomCharOptions) {
+    const pattern = [
+      ...new Set(
+        (options.charsets || ['number']).reduce((acc, charset) => {
+          switch (charset) {
+            case 'number':
+              return acc + '0-9';
+            case 'lowercase':
+              return acc + 'a-z';
+            case 'uppercase':
+              return acc + 'A-Z';
+            case 'symbol':
+              return acc + CHAR_SETS.symbol.replace('-', '').replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '-';
+            default:
+              return acc;
+          }
+        }, ''),
+      ),
+    ].join('');
+
+    return `[${pattern}]{${options.length || 6}}`;
   },
 });
 

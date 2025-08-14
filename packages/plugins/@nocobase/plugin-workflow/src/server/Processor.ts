@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { fn, col } from 'sequelize';
 import { Model, Transaction, Transactionable } from '@nocobase/database';
 import { appendArrayColumn } from '@nocobase/evaluators';
 import { Logger } from '@nocobase/logger';
@@ -44,22 +45,21 @@ export default class Processor {
   /**
    * @experimental
    */
+  mainTransaction: Transaction;
+
+  /**
+   * @experimental
+   */
   nodes: FlowNodeModel[] = [];
 
   /**
    * @experimental
    */
-  nodesMap = new Map<number, FlowNodeModel>();
+  nodesMap = new Map<number | string, FlowNodeModel>();
 
-  /**
-   * @experimental
-   */
-  jobsMap = new Map<number, JobModel>();
-
-  /**
-   * @experimental
-   */
-  jobsMapByNodeKey: { [key: string]: any } = {};
+  private jobsMapByNodeKey: { [key: string]: JobModel } = {};
+  private jobResultsMapByNodeKey: { [key: string]: any } = {};
+  private jobsToSave: Map<string, JobModel> = new Map();
 
   /**
    * @experimental
@@ -95,31 +95,51 @@ export default class Processor {
 
   private makeJobs(jobs: Array<JobModel>) {
     jobs.forEach((job) => {
-      this.jobsMap.set(job.id, job);
-
       const node = this.nodesMap.get(job.nodeId);
-      this.jobsMapByNodeKey[node.key] = job.result;
+      this.jobsMapByNodeKey[node.key] = job;
+      this.jobResultsMapByNodeKey[node.key] = job.result;
     });
   }
 
   public async prepare() {
     const {
       execution,
-      transaction,
       options: { plugin },
     } = this;
+
+    this.mainTransaction = plugin.useDataSourceTransaction('main', this.transaction);
+
+    const transaction = this.mainTransaction;
+
     if (!execution.workflow) {
-      execution.workflow = plugin.enabledCache.get(execution.workflowId);
+      execution.workflow =
+        plugin.enabledCache.get(execution.workflowId) || (await execution.getWorkflow({ transaction }));
     }
 
     const nodes = await execution.workflow.getNodes({ transaction });
+    execution.workflow.nodes = nodes;
 
     this.makeNodes(nodes);
 
+    const JobDBModel = plugin.db.getModel('jobs');
+    const jobIds = await JobDBModel.findAll({
+      attributes: ['executionId', 'nodeId', [fn('MAX', col('id')), 'id']],
+      group: ['executionId', 'nodeId'],
+      where: {
+        executionId: execution.id,
+      },
+      raw: true,
+      transaction,
+    });
     const jobs = await execution.getJobs({
+      where: {
+        id: jobIds.map((item) => item.id),
+      },
       order: [['id', 'ASC']],
       transaction,
     });
+
+    execution.jobs = jobs;
 
     this.makeJobs(jobs);
   }
@@ -127,7 +147,8 @@ export default class Processor {
   public async start() {
     const { execution } = this;
     if (execution.status !== EXECUTION_STATUS.STARTED) {
-      throw new Error(`execution was ended with status ${execution.status} before, could not be started again`);
+      this.logger.warn(`execution was ended with status ${execution.status} before, could not be started again`);
+      return;
     }
     await this.prepare();
     if (this.nodes.length) {
@@ -141,7 +162,8 @@ export default class Processor {
   public async resume(job: JobModel) {
     const { execution } = this;
     if (execution.status !== EXECUTION_STATUS.STARTED) {
-      throw new Error(`execution was ended with status ${execution.status} before, could not be resumed`);
+      this.logger.warn(`execution was ended with status ${execution.status} before, could not be resumed`);
+      return;
     }
     await this.prepare();
     const node = this.nodesMap.get(job.nodeId);
@@ -152,11 +174,13 @@ export default class Processor {
     let job;
     try {
       // call instruction to get result and status
-      this.logger.info(`execution (${this.execution.id}) run instruction [${node.type}] for node (${node.id})`);
       this.logger.debug(`config of node`, { data: node.config });
       job = await instruction(node, prevJob, this);
+      if (job === null) {
+        return this.exit();
+      }
       if (!job) {
-        return null;
+        return this.exit(true);
       }
     } catch (err) {
       // for uncaught error, set to error
@@ -182,11 +206,11 @@ export default class Processor {
     }
 
     if (!(job instanceof Model)) {
-      job.upstreamId = prevJob instanceof Model ? prevJob.get('id') : null;
+      // job.upstreamId = prevJob instanceof Model ? prevJob.get('id') : null;
       job.nodeId = node.id;
       job.nodeKey = node.key;
     }
-    const savedJob = await this.saveJob(job);
+    const savedJob = this.saveJob(job);
 
     this.logger.info(
       `execution (${this.execution.id}) run instruction [${node.type}] for node (${node.id}) finished as status: ${savedJob.status}`,
@@ -213,6 +237,7 @@ export default class Processor {
       return Promise.reject(new Error('`run` should be implemented for customized execution of the node'));
     }
 
+    this.logger.info(`execution (${this.execution.id}) run instruction [${node.type}] for node (${node.id})`);
     return this.exec(instruction.run.bind(instruction), node, input);
   }
 
@@ -224,7 +249,7 @@ export default class Processor {
     if (parentNode) {
       this.logger.debug(`not on main, recall to parent entry node (${node.id})})`);
       await this.recall(parentNode, job);
-      return job;
+      return null;
     }
 
     // really done for all nodes
@@ -244,47 +269,97 @@ export default class Processor {
       );
     }
 
+    this.logger.info(`execution (${this.execution.id}) resume instruction [${node.type}] for node (${node.id})`);
     return this.exec(instruction.resume.bind(instruction), node, job);
   }
 
-  public async exit(s?: number) {
+  public async exit(s?: number | true) {
+    if (s === true) {
+      return;
+    }
+    if (this.jobsToSave.size) {
+      const newJobs = [];
+      for (const job of this.jobsToSave.values()) {
+        if (job.isNewRecord) {
+          newJobs.push(job);
+        } else {
+          const JobCollection = this.options.plugin.db.getCollection('jobs');
+          const changes = [];
+          if (job.changed('status')) {
+            changes.push([`status`, job.status]);
+            job.changed('status', false);
+          }
+          if (job.changed('result')) {
+            changes.push([`result`, JSON.stringify(job.result ?? null)]);
+            job.changed('result', false);
+          }
+          if (changes.length) {
+            await this.options.plugin.db.sequelize.query(
+              `UPDATE ${JobCollection.quotedTableName()} SET ${changes.map(([key]) => `${key} = ?`)} WHERE id='${
+                job.id
+              }'`,
+              { replacements: changes.map(([, value]) => value), transaction: this.mainTransaction },
+            );
+          }
+          // await job.save({ transaction: this.mainTransaction });
+        }
+      }
+      if (newJobs.length) {
+        const JobsModel = this.options.plugin.db.getModel('jobs');
+        await JobsModel.bulkCreate(
+          newJobs.map((job) => job.toJSON()),
+          {
+            transaction: this.mainTransaction,
+            returning: false,
+          },
+        );
+        for (const job of newJobs) {
+          job.isNewRecord = false;
+        }
+      }
+      this.jobsToSave.clear();
+    }
     if (typeof s === 'number') {
       const status = (<typeof Processor>this.constructor).StatusMap[s] ?? Math.sign(s);
-      await this.execution.update({ status }, { transaction: this.transaction });
+      await this.execution.update({ status }, { transaction: this.mainTransaction });
+    }
+    if (this.mainTransaction && this.mainTransaction !== this.transaction) {
+      await this.mainTransaction.commit();
     }
     this.logger.info(`execution (${this.execution.id}) exiting with status ${this.execution.status}`);
     return null;
   }
 
-  // TODO(optimize)
   /**
    * @experimental
-   * @param {JobModel | Record<string, any>} payload
-   * @returns {JobModel}
    */
-  async saveJob(payload) {
+  saveJob(payload: JobModel | Record<string, any>): JobModel {
     const { database } = <typeof ExecutionModel>this.execution.constructor;
-    const { transaction } = this;
     const { model } = database.getCollection('jobs');
     let job;
     if (payload instanceof model) {
-      job = await payload.save({ transaction });
-    } else if (payload.id) {
-      job = await model.findByPk(payload.id, { transaction });
-      await job.update(payload, { transaction });
+      job = payload;
+      job.set('updatedAt', new Date());
     } else {
-      job = await model.create(
+      job = model.build(
         {
           ...payload,
+          id: this.options.plugin.snowflake.getUniqueID().toString(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
           executionId: this.execution.id,
         },
-        { transaction },
+        {
+          isNewRecord: true,
+        },
       );
     }
-    this.jobsMap.set(job.id, job);
+    this.jobsToSave.set(job.id, job);
 
     this.lastSavedJob = job;
-    this.jobsMapByNodeKey[job.nodeKey] = job.result;
+    this.jobsMapByNodeKey[job.nodeKey] = job;
+    this.jobResultsMapByNodeKey[job.nodeKey] = job.result;
+    this.logger.debug(`job added to save list: ${JSON.stringify(job)}`);
 
     return job;
   }
@@ -346,38 +421,26 @@ export default class Processor {
    * @experimental
    */
   findBranchParentJob(job: JobModel, node: FlowNodeModel): JobModel | null {
-    for (let j: JobModel | undefined = job; j; j = this.jobsMap.get(j.upstreamId)) {
-      if (j.nodeId === node.id) {
-        return j;
-      }
-    }
-    return null;
+    return this.jobsMapByNodeKey[node.key];
   }
 
   /**
    * @experimental
    */
   findBranchLastJob(node: FlowNodeModel, job: JobModel): JobModel | null {
-    const allJobs = Array.from(this.jobsMap.values());
+    const allJobs = Object.values(this.jobsMapByNodeKey);
     const branchJobs = [];
     for (let n = this.findBranchEndNode(node); n && n !== node.upstream; n = n.upstream) {
       branchJobs.push(...allJobs.filter((item) => item.nodeId === n.id));
     }
-    branchJobs.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    for (let i = branchJobs.length - 1; i >= 0; i -= 1) {
-      for (let j = branchJobs[i]; j && j.id !== job.id; j = this.jobsMap.get(j.upstreamId)) {
-        if (j.upstreamId === job.id) {
-          return branchJobs[i];
-        }
-      }
-    }
-    return null;
+    branchJobs.sort((a, b) => a.id - b.id);
+    return branchJobs[branchJobs.length - 1] || null;
   }
 
   /**
    * @experimental
    */
-  public getScope(sourceNodeId: number) {
+  public getScope(sourceNodeId?: number | string, includeSelfScope = false) {
     const node = this.nodesMap.get(sourceNodeId);
     const systemFns = {};
     const scope = {
@@ -389,27 +452,32 @@ export default class Processor {
     }
 
     const $scopes = {};
-    for (let n = this.findBranchParentNode(node); n; n = this.findBranchParentNode(n)) {
+    for (let n = includeSelfScope ? node : this.findBranchParentNode(node); n; n = this.findBranchParentNode(n)) {
       const instruction = this.options.plugin.instructions.get(n.type);
-      if (typeof instruction.getScope === 'function') {
-        $scopes[n.id] = $scopes[n.key] = instruction.getScope(n, this.jobsMapByNodeKey[n.key], this);
+      if (typeof instruction?.getScope === 'function') {
+        $scopes[n.id] = $scopes[n.key] = instruction.getScope(n, this.jobResultsMapByNodeKey[n.key], this);
       }
     }
 
     return {
       $context: this.execution.context,
-      $jobsMapByNodeKey: this.jobsMapByNodeKey,
+      $jobsMapByNodeKey: this.jobResultsMapByNodeKey,
       $system: systemFns,
       $scopes,
+      $env: this.options.plugin.app.environment.getVariables(),
     };
   }
 
   /**
    * @experimental
    */
-  public getParsedValue(value, sourceNodeId: number, additionalScope?: object) {
+  public getParsedValue(
+    value,
+    sourceNodeId?: number | string,
+    { additionalScope = {}, includeSelfScope = false } = {},
+  ) {
     const template = parse(value);
-    const scope = Object.assign(this.getScope(sourceNodeId), additionalScope);
+    const scope = Object.assign(this.getScope(sourceNodeId, includeSelfScope), additionalScope);
     template.parameters.forEach(({ key }) => {
       appendArrayColumn(scope, key);
     });

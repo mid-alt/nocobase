@@ -13,12 +13,11 @@ import { ArrayField } from '@formily/core';
 import { ISchema, RecursionField, observer, useField, useFieldSchema } from '@formily/react';
 import { toArr } from '@formily/shared';
 import { Badge, Card, Collapse, CollapsePanelProps, CollapseProps, Empty, Input } from 'antd';
-import cls from 'classnames';
 import { cloneDeep } from 'lodash';
 import React, { Fragment, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToken } from '../../../style';
-import { useStyles } from './LinkageHeader.style';
+import { arrayCollapseItemStyle } from './LinkageHeader.style';
 
 const LinkageRulesTitle = (props) => {
   const array = ArrayBase.useArray();
@@ -103,7 +102,6 @@ const insertActiveKeys = (activeKeys: number[], index: number) => {
 
 export const ArrayCollapse: ComposedArrayCollapse = observer(
   (props: IArrayCollapseProps) => {
-    const { styles } = useStyles();
     const field = useField<ArrayField>();
     const dataSource = Array.isArray(field.value) ? field.value : [];
     const [activeKeys, setActiveKeys] = useState<number[]>(
@@ -128,19 +126,19 @@ export const ArrayCollapse: ComposedArrayCollapse = observer(
     const renderEmpty = () => {
       if (dataSource.length) return;
       return (
-        <Card className={cls(`${styles.arrayCollapseItem}`, props.className)}>
+        <Card className={props.className} style={arrayCollapseItemStyle}>
           <Empty />
         </Card>
       );
     };
-
     const renderItems = () => {
       return (
         <Collapse
           {...props}
           activeKey={activeKeys}
           onChange={(keys: string[]) => setActiveKeys(toArr(keys).map(Number))}
-          className={cls(`${styles.arrayCollapseItem}`, props.className)}
+          className={props.className}
+          style={arrayCollapseItemStyle}
         >
           {dataSource.map((item, index) => {
             const items = Array.isArray(schema.items) ? schema.items[index] || schema.items[0] : schema.items;
@@ -169,6 +167,8 @@ export const ArrayCollapse: ComposedArrayCollapse = observer(
                     <Badge size="small" className="errors-badge" count={errors.length}>
                       {header}
                     </Badge>
+                  ) : props.header ? (
+                    props.header
                   ) : (
                     <LinkageRulesTitle item={item.initialValue || item} index={index} />
                   )}

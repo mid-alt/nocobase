@@ -24,10 +24,12 @@ import {
   RemoveButton,
   SecondConFirm,
   SkipValidation,
-  WorkflowConfig,
 } from '../../../schema-component/antd/action/Action.Designer';
 import { useCollectionState } from '../../../schema-settings/DataTemplates/hooks/useCollectionState';
 import { SchemaSettingsModalItem } from '../../../schema-settings/SchemaSettings';
+import { useParentPopupRecord } from '../../variable/variablesProvider/VariablePopupRecordProvider';
+import { useDataBlockProps } from '../../../data-source';
+import { SchemaSettingsLinkageRules } from '../../../schema-settings';
 
 const Tree = connect(
   AntdTree,
@@ -54,8 +56,9 @@ export function SaveMode() {
   const field = useField();
   const fieldSchema = useFieldSchema();
   const { name } = useCollection_deprecated();
-  const { getEnableFieldTree, getOnLoadData } = useCollectionState(name);
-
+  const { getEnableFieldTree, getOnLoadData } = useCollectionState(name, false, (field) => {
+    return ['belongsTo', 'belongsToMany', 'hasOne', 'hasMany'].includes(field.type);
+  });
   return (
     <SchemaSettingsModalItem
       title={t('Save mode')}
@@ -69,7 +72,6 @@ export function SaveMode() {
             saveMode: {
               'x-decorator': 'FormItem',
               'x-component': 'Radio.Group',
-              // title: t('Save mode'),
               default: field.componentProps.saveMode || 'create',
               enum: [
                 { value: 'create', label: '{{t("Insert")}}' },
@@ -149,20 +151,26 @@ export const createSubmitActionSettings = new SchemaSettings({
       },
     },
     {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
       name: 'secondConfirmation',
       Component: SecondConFirm,
     },
     {
-      name: 'workflowConfig',
-      Component: WorkflowConfig,
-      useVisible() {
-        const fieldSchema = useFieldSchema();
-        return isValid(fieldSchema?.['x-action-settings']?.triggerWorkflows);
-      },
-    },
-    {
       name: 'saveMode',
       Component: SaveMode,
+      useVisible() {
+        const { type } = useDataBlockProps() || ({} as any);
+        return type !== 'publicForm';
+      },
     },
     {
       name: 'assignFieldValues',
@@ -176,8 +184,8 @@ export const createSubmitActionSettings = new SchemaSettings({
       name: 'afterSuccessfulSubmission',
       Component: AfterSuccess,
       useVisible() {
-        const fieldSchema = useFieldSchema();
-        return isValid(fieldSchema?.['x-action-settings']?.onSuccess);
+        const { type } = useDataBlockProps() || ({} as any);
+        return type !== 'publicForm';
       },
     },
     {
@@ -187,6 +195,10 @@ export const createSubmitActionSettings = new SchemaSettings({
         return {
           isPopupAction: false,
         };
+      },
+      useVisible() {
+        const parentRecord = useParentPopupRecord();
+        return !!parentRecord;
       },
     },
     {

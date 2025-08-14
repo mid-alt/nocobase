@@ -11,16 +11,19 @@ import { onFieldValueChange } from '@formily/core';
 import { uid } from '@formily/shared';
 import { useForm, useField, useFormEffects } from '@formily/react';
 import { ArrayItems } from '@formily/antd-v5';
+import { GlobalOutlined } from '@ant-design/icons';
 
+import { SchemaComponent, css } from '@nocobase/client';
 import {
   Instruction,
   WorkflowVariableJSON,
+  WorkflowVariableRawTextArea,
   WorkflowVariableTextArea,
+  WorkflowVariableInput,
   defaultFieldNames,
 } from '@nocobase/plugin-workflow/client';
 
 import { NAMESPACE, useLang } from '../locale';
-import { SchemaComponent, css } from '@nocobase/client';
 
 const BodySchema = {
   'application/json': {
@@ -91,6 +94,149 @@ const BodySchema = {
       },
     },
   },
+  'multipart/form-data': {
+    type: 'void',
+    properties: {
+      data: {
+        type: 'array',
+        'x-decorator': 'FormItem',
+        'x-decorator-props': {},
+        'x-component': 'ArrayItems',
+        items: {
+          type: 'object',
+          properties: {
+            space: {
+              type: 'void',
+              'x-component': 'Space',
+              properties: {
+                name: {
+                  type: 'string',
+                  'x-decorator': 'FormItem',
+                  'x-component': 'Input',
+                  'x-component-props': {
+                    placeholder: `{{t("Name")}}`,
+                  },
+                },
+                valueType: {
+                  type: 'string',
+                  'x-decorator': 'FormItem',
+                  'x-component': 'Select',
+                  'x-component-props': {
+                    allowClear: false,
+                  },
+                  enum: [
+                    { value: 'text', label: 'Text' },
+                    { value: 'file', label: 'File' },
+                  ],
+                  default: 'text',
+                },
+                text: {
+                  type: 'string',
+                  'x-decorator': 'FormItem',
+                  'x-component': 'WorkflowVariableTextArea',
+                  'x-component-props': {
+                    useTypedConstant: true,
+                  },
+                  'x-reactions': [
+                    {
+                      dependencies: ['.valueType'],
+                      fulfill: {
+                        state: {
+                          visible: '{{ $deps[0]==="text" }}',
+                        },
+                      },
+                    },
+                  ],
+                },
+                file: {
+                  type: 'string',
+                  'x-decorator': 'FormItem',
+                  'x-component': 'WorkflowVariableInput',
+                  'x-component-props': {
+                    variableOptions: {
+                      types: [
+                        function isFileRecordMatch(field, { collectionManager }) {
+                          if (!field.target) {
+                            return false;
+                          }
+
+                          return (
+                            field.target === 'attachments' ||
+                            collectionManager.getCollection(field.target)?.template === 'file'
+                          );
+                        },
+                      ],
+                    },
+                  },
+                  'x-reactions': [
+                    {
+                      dependencies: ['.valueType'],
+                      fulfill: {
+                        state: {
+                          visible: '{{ $deps[0]==="file" }}',
+                        },
+                      },
+                    },
+                  ],
+                },
+                remove: {
+                  type: 'void',
+                  'x-decorator': 'FormItem',
+                  'x-component': 'ArrayItems.Remove',
+                },
+              },
+            },
+          },
+        },
+        properties: {
+          add: {
+            type: 'void',
+            title: `{{t("Add key-value pairs", { ns: "${NAMESPACE}" })}}`,
+            'x-component': 'ArrayItems.Addition',
+          },
+        },
+      },
+    },
+  },
+  'application/xml': {
+    type: 'void',
+    properties: {
+      data: {
+        type: 'string',
+        'x-decorator': 'FormItem',
+        'x-component': 'WorkflowVariableRawTextArea',
+        'x-component-props': {
+          placeholder: '<?xml version="1.0" encoding="UTF-8"?>',
+          autoSize: {
+            minRows: 10,
+          },
+          className: css`
+            font-size: 80%;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+          `,
+        },
+      },
+    },
+  },
+  'text/plain': {
+    type: 'void',
+    properties: {
+      data: {
+        type: 'string',
+        'x-decorator': 'FormItem',
+        'x-component': 'WorkflowVariableRawTextArea',
+        'x-component-props': {
+          autoSize: {
+            minRows: 10,
+          },
+          className: css`
+            font-size: 80%;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+          `,
+        },
+      },
+    },
+  },
 };
 
 function BodyComponent(props) {
@@ -115,6 +261,7 @@ export default class extends Instruction {
   type = 'request';
   group = 'extended';
   description = `{{t("Send HTTP request to a URL. You can use the variables in the upstream nodes as request headers, parameters and request body.", { ns: "${NAMESPACE}" })}}`;
+  icon = (<GlobalOutlined />);
   fieldset = {
     method: {
       type: 'string',
@@ -158,6 +305,9 @@ export default class extends Instruction {
       enum: [
         { label: 'application/json', value: 'application/json' },
         { label: 'application/x-www-form-urlencoded', value: 'application/x-www-form-urlencoded' },
+        { label: 'multipart/form-data', value: 'multipart/form-data' },
+        { label: 'application/xml', value: 'application/xml' },
+        { label: 'text/plain', value: 'text/plain' },
       ],
       default: 'application/json',
     },
@@ -308,7 +458,7 @@ export default class extends Instruction {
     },
     ignoreFail: {
       type: 'boolean',
-      title: `{{t("Ignore failed request and continue workflow", { ns: "${NAMESPACE}" })}}`,
+      'x-content': `{{t("Ignore failed request and continue workflow", { ns: "${NAMESPACE}" })}}`,
       'x-decorator': 'FormItem',
       'x-component': 'Checkbox',
     },
@@ -316,8 +466,10 @@ export default class extends Instruction {
   components = {
     ArrayItems,
     BodyComponent,
-    WorkflowVariableTextArea,
     WorkflowVariableJSON,
+    WorkflowVariableTextArea,
+    WorkflowVariableRawTextArea,
+    WorkflowVariableInput,
   };
   useVariables({ key, title, config }, { types }) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -347,4 +499,5 @@ export default class extends Instruction {
           ],
     };
   }
+  testable = true;
 }

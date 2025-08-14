@@ -7,14 +7,19 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Collection, Op } from '@nocobase/database';
-import { Plugin } from '@nocobase/server';
+import { Collection, Model, Op } from '@nocobase/database';
+import { InstallOptions, Plugin } from '@nocobase/server';
 import { parse } from '@nocobase/utils';
-import { resolve } from 'path';
-
-import { Cache } from '@nocobase/cache';
 import * as actions from './actions/users';
 import { UserModel } from './models/UserModel';
+import PluginUserDataSyncServer from '@nocobase/plugin-user-data-sync';
+import { UserDataSyncResource } from './user-data-sync-resource';
+import {
+  adminProfileCreateFormSchema,
+  adminProfileEditFormSchema,
+  userProfileEditFormSchema,
+} from './profile/edit-form-schema';
+import { UiSchemaRepository } from '@nocobase/plugin-ui-schema-storage';
 
 export default class PluginUsersServer extends Plugin {
   async beforeLoad() {
@@ -144,29 +149,52 @@ export default class PluginUsersServer extends Plugin {
       };
     });
 
-    const loggedInActions = ['updateProfile'];
+    const loggedInActions = ['updateProfile', 'updateLang'];
     loggedInActions.forEach((action) => this.app.acl.allow('users', action, 'loggedIn'));
 
     this.app.acl.registerSnippet({
       name: `pm.${this.name}`,
       actions: ['users:*'],
     });
+
+    const getMetaDataForUpdateProfileAction = async (ctx: any) => {
+      return {
+        request: {
+          body: {
+            ...ctx.request.body,
+            password: '******',
+          },
+        },
+      };
+    };
+
+    const getSourceAndTargetForUpdateProfileAction = async (ctx: any) => {
+      const { id } = ctx.state.currentUser;
+      let idStr = '';
+      if (typeof id === 'number') {
+        idStr = id.toString();
+      } else if (typeof id === 'string') {
+        idStr = id;
+      }
+      return {
+        targetCollection: 'users',
+        targetRecordUK: idStr,
+      };
+    };
+
+    this.app.auditManager.registerActions([
+      {
+        name: 'users:updateProfile',
+        getMetaData: getMetaDataForUpdateProfileAction,
+        getSourceAndTarget: getSourceAndTargetForUpdateProfileAction,
+      },
+    ]);
   }
 
   async load() {
-    await this.importCollections(resolve(__dirname, 'collections'));
-    this.db.addMigrations({
-      namespace: 'users',
-      directory: resolve(__dirname, 'migrations'),
-      context: {
-        plugin: this,
-      },
-    });
-
-    this.app.resourcer.use(async (ctx, next) => {
+    this.app.resourceManager.use(async function deleteRolesCache(ctx, next) {
       await next();
       const { associatedName, resourceName, actionName, values } = ctx.action.params;
-      const cache = ctx.app.cache as Cache;
       if (
         associatedName === 'roles' &&
         resourceName === 'users' &&
@@ -174,10 +202,31 @@ export default class PluginUsersServer extends Plugin {
         values?.length
       ) {
         // Delete cache when the members of a role changed
-        for (const userId of values) {
-          await cache.del(`roles:${userId}`);
-        }
+        await Promise.all(values.map((userId: number) => ctx.app.emitAsync('cache:del:roles', { userId })));
       }
+    });
+
+    this.app.resourceManager.use(async (ctx, next) => {
+      const { resourceName, actionName } = ctx.action;
+      if (resourceName === 'users' && actionName === 'updateProfile') {
+        // for triggering workflows
+        ctx.action.actionName = 'update';
+      }
+      await next();
+    });
+
+    const userDataSyncPlugin = this.app.pm.get('user-data-sync') as PluginUserDataSyncServer;
+    if (userDataSyncPlugin && userDataSyncPlugin.enabled) {
+      userDataSyncPlugin.resourceManager.registerResource(new UserDataSyncResource(this.db, this.app.logger));
+    }
+
+    this.app.db.on('users.beforeUpdate', async (model: Model) => {
+      if (!model._changed.has('password')) {
+        return;
+      }
+      model.set('passwordChangeTz', Date.now());
+      await this.app.emitAsync('cache:del:roles', { userId: model.get('id') });
+      await this.app.emitAsync('cache:del:auth', { userId: model.get('id') });
     });
   }
 
@@ -197,7 +246,7 @@ export default class PluginUsersServer extends Plugin {
     };
   }
 
-  async install(options) {
+  async initUserCollection(options: InstallOptions) {
     const { rootNickname, rootPassword, rootEmail, rootUsername } = this.getInstallingData(options);
     const User = this.db.getCollection('users');
 
@@ -219,5 +268,20 @@ export default class PluginUsersServer extends Plugin {
     if (repo) {
       await repo.db2cm('users');
     }
+  }
+
+  async initProfileSchema() {
+    const uiSchemas = this.db.getRepository<UiSchemaRepository>('uiSchemas');
+    if (!uiSchemas) {
+      return;
+    }
+    await uiSchemas.insert(adminProfileCreateFormSchema);
+    await uiSchemas.insert(adminProfileEditFormSchema);
+    await uiSchemas.insert(userProfileEditFormSchema);
+  }
+
+  async install(options: InstallOptions) {
+    await this.initUserCollection(options);
+    await this.initProfileSchema();
   }
 }

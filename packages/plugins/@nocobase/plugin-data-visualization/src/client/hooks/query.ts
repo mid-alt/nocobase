@@ -11,12 +11,10 @@ import { ArrayField } from '@formily/core';
 import { ISchema, Schema, useForm } from '@formily/react';
 import {
   CollectionFieldOptions,
-  CollectionFieldOptions_deprecated,
-  CollectionManager,
   DEFAULT_DATA_SOURCE_KEY,
   useACLRoleContext,
-  useCollectionManager_deprecated,
   useDataSourceManager,
+  usePlugin,
 } from '@nocobase/client';
 import { useContext, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +22,8 @@ import { ChartConfigContext } from '../configure';
 import formatters from '../configure/formatters';
 import { useChartsTranslation } from '../locale';
 import { ChartRendererContext } from '../renderer';
-import { getField, getSelectedFields, parseField, processData } from '../utils';
+import { getField, getSelectedFields, parseField } from '../utils';
+import PluginDataVisualiztionClient from '..';
 
 export type FieldOption = {
   value: string;
@@ -134,6 +133,9 @@ export const useFormatters = (fields: FieldOption[]) => (field: any) => {
   const fieldInterface = getField(fields, selectedField)?.interface;
   switch (fieldInterface) {
     case 'datetime':
+    case 'datetimeTz':
+    case 'unixTimestamp':
+    case 'datetimeNoTz':
     case 'createdAt':
     case 'updatedAt':
       options = formatters.datetime;
@@ -226,12 +228,36 @@ export const useOrderReaction = (defaultOptions: any[], fields: FieldOption[]) =
 };
 
 export const useData = (data?: any[], dataSource?: string, collection?: string) => {
-  const { t } = useChartsTranslation();
   const { service, query } = useContext(ChartRendererContext);
+  const plugin = usePlugin(PluginDataVisualiztionClient);
   const fields = useFieldsWithAssociation(dataSource, collection);
   const form = useForm();
-  const selectedFields = getSelectedFields(fields, form?.values?.query || query);
-  return processData(selectedFields, service?.data || data || [], { t });
+  const selectedFields = getSelectedFields(fields, form?.values?.query || query) as (FieldOption & { query?: any })[];
+  const fieldInterfaceConfigs = plugin.fieldInterfaceConfigs;
+  const formatters = {};
+  for (const field of selectedFields) {
+    if (field?.query?.aggregation) {
+      continue;
+    }
+    const config = fieldInterfaceConfigs[field.interface];
+    if (!config) {
+      continue;
+    }
+    const { valueFormatter } = config;
+    formatters[field.value] = (value: any) => valueFormatter(field, value);
+  }
+  return (service?.data || data || []).map((record: any) => {
+    const processed = {};
+    Object.entries(record).forEach(([key, value]) => {
+      const formatter = formatters[key];
+      if (!formatter) {
+        processed[key] = value;
+        return;
+      }
+      processed[key] = formatter(value);
+    });
+    return processed;
+  });
 };
 
 export const useCollectionFieldsOptions = (dataSource: string, collectionName: string, maxDepth = 2, excludes = []) => {
@@ -240,7 +266,7 @@ export const useCollectionFieldsOptions = (dataSource: string, collectionName: s
   const fields = collectionFields.filter((v) => !excludes.includes(v.interface));
 
   const field2option = (field, depth, prefix?) => {
-    if (!field.interface || field.isForeignKey) {
+    if (!field.interface) {
       return;
     }
     const fieldInterface = fim.getFieldInterface(field.interface);
@@ -297,7 +323,7 @@ export const useCollectionFilterOptions = (dataSource: string, collection: strin
   return useMemo(() => {
     const fields = cm.getCollectionFields(collection || _collection);
     const field2option = (field, depth) => {
-      if (!field.interface || field.isForeignKey) {
+      if (!field.interface) {
         return;
       }
       const fieldInterface = fim.getFieldInterface(field.interface);

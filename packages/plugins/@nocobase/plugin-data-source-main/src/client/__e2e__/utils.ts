@@ -42,7 +42,7 @@ export async function testEditDescription(page: Page) {
   await page.getByLabel('block-item-Input.TextArea-').getByRole('textbox').click();
   await page.getByLabel('block-item-Input.TextArea-').getByRole('textbox').fill('testing edit description');
   await page.getByRole('button', { name: 'OK', exact: true }).click();
-  await expect(page.getByText('testing edit description')).toBeVisible();
+  await expect(page.getByText('testing edit description').last()).toBeVisible();
 }
 
 export async function testRequired(page: Page) {
@@ -332,7 +332,7 @@ export class CollectionSettings {
 
   private async ['File storage'](value: string) {
     await this.page.getByLabel('block-item-RemoteSelect-collections-File storage').getByTestId('select-single').click();
-    await this.page.getByRole('option', { name: value }).click();
+    await this.page.getByTitle(value).click();
   }
 
   private async ['Collection display name'](value: string) {
@@ -430,8 +430,11 @@ export type FieldInterface =
   | 'Markdown'
   | 'Rich Text'
   | 'Attachment'
-  | 'Datetime'
+  | 'Datetime (with time zone)'
+  | 'Datetime (without time zone)'
+  | 'Date'
   | 'Time'
+  | 'Unix Timestamp'
   | 'One to one (belongs to)'
   | 'One to one (has one)'
   | 'One to many'

@@ -43,12 +43,19 @@ import {
   useMobileNavigationBarLink,
 } from './pages';
 
+import PluginACLClient from '@nocobase/plugin-acl/client';
+import { MenuPermissions, MobileAllRoutesProvider } from './MenuPermissions';
+
 // 导出 JSBridge，会挂在到 window 上
 import './js-bridge';
 import { MobileSettings } from './mobile-blocks/settings-block/MobileSettings';
 import { MobileSettingsBlockInitializer } from './mobile-blocks/settings-block/MobileSettingsBlockInitializer';
 import { MobileSettingsBlockSchemaSettings } from './mobile-blocks/settings-block/schemaSettings';
+// @ts-ignore
+import pkg from './../../package.json';
+import { MobileComponentsProvider } from './MobileComponentsProvider';
 
+export { MobilePopup } from './adaptor-of-desktop/ActionDrawer';
 export * from './desktop-mode';
 export * from './mobile';
 export * from './mobile-layout';
@@ -67,7 +74,7 @@ export class PluginMobileClient extends Plugin {
     return `${this.router.getBasename()}m`; // `/m` or `/apps/aaa/m`（多应用）
   }
 
-  async updateOptions(value: { showTabBar?: boolean }) {
+  async updateOptions(value: { showTabBar?: boolean; showBackButton?: boolean }) {
     if (!this.options) {
       this.options = {};
     }
@@ -99,12 +106,14 @@ export class PluginMobileClient extends Plugin {
   }
 
   async load() {
+    this.app.use(MobileComponentsProvider);
     this.addComponents();
     this.addAppRoutes();
     this.addRoutes();
     this.addInitializers();
     this.addSettings();
     this.addScopes();
+    this.addPermissionsSettingsUI();
 
     this.app.pluginSettingsManager.add('mobile', {
       title: generatePluginTranslationTemplate('Mobile'),
@@ -239,6 +248,32 @@ export class PluginMobileClient extends Plugin {
 
   getRouterComponent() {
     return this.mobileRouter.getRouterComponent();
+  }
+
+  addPermissionsSettingsUI() {
+    this.app.pm.get(PluginACLClient)?.settingsUI.addPermissionsTab(({ t, TabLayout, activeKey, currentUserRole }) => {
+      if (
+        currentUserRole &&
+        ((!currentUserRole.snippets.includes('pm.mobile') && !currentUserRole.snippets.includes('pm.*')) ||
+          currentUserRole.snippets.includes('!pm.mobile'))
+      ) {
+        return null;
+      }
+
+      return {
+        key: 'mobile-menu',
+        label: t('Mobile routes', {
+          ns: pkg.name,
+        }),
+        children: (
+          <TabLayout>
+            <MobileAllRoutesProvider active={activeKey === 'mobile-menu'}>
+              <MenuPermissions active={activeKey === 'mobile-menu'} />
+            </MobileAllRoutesProvider>
+          </TabLayout>
+        ),
+      };
+    });
   }
 }
 

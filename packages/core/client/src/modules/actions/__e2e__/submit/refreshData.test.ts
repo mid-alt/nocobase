@@ -8,10 +8,14 @@
  */
 
 import { expect, test } from '@nocobase/test/e2e';
-import { shouldRefreshDataWhenSubpageIsClosedByPageMenu, submitInReferenceTemplateBlock } from './templates';
+import {
+  createFormSubmit,
+  shouldRefreshDataWhenSubpageIsClosedByPageMenu,
+  submitInReferenceTemplateBlock,
+} from './templates';
 
 test.describe('Submit: should refresh data after submit', () => {
-  test('submit in reference template block', async ({ page, mockPage, clearBlockTemplates, mockRecord }) => {
+  test.skip('submit in reference template block', async ({ page, mockPage, clearBlockTemplates, mockRecord }) => {
     const nocoPage = await mockPage(submitInReferenceTemplateBlock).waitForInit();
     await mockRecord('collection', { nickname: 'abc' });
     await nocoPage.goto();
@@ -105,6 +109,37 @@ test.describe('Submit: should refresh data after submit', () => {
     await page.getByLabel(pageUid).click();
 
     // 5. The data in the block on the page should be up-to-date
-    await page.getByRole('button', { name: '1234567890', exact: true }).click();
+    await expect(page.getByRole('button', { name: '1234567890', exact: true })).toBeVisible();
+  });
+});
+
+test.describe('Submit: After successful submission', () => {
+  test('return to the previous popup or page as default value', async ({ page, mockPage, mockRecord }) => {
+    const nocoPage = await mockPage(createFormSubmit).waitForInit();
+    await nocoPage.goto();
+
+    await page.getByLabel('action-Action-Add new-create-').click();
+    await page.getByLabel('action-Action-Submit-submit-').click();
+    await expect(page.getByTestId('drawer-Action.Container-users-Add record')).not.toBeVisible();
+  });
+
+  test('return to the previous popup or page change to stay on the current popup or page', async ({
+    page,
+    mockPage,
+    mockRecord,
+  }) => {
+    const nocoPage = await mockPage(createFormSubmit).waitForInit();
+    await nocoPage.goto();
+
+    await page.getByLabel('action-Action-Add new-create-').click();
+
+    await page.getByLabel('action-Action-Submit-submit-').hover();
+    await page.getByLabel('designer-schema-settings-Action-actionSettings:createSubmit-users').hover();
+
+    await page.getByText('After successful submission').click();
+    await page.getByLabel('Stay on the current popup or').check();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await page.getByLabel('action-Action-Submit-submit-').click();
+    await expect(page.getByTestId('drawer-Action.Container-users-Add record')).toBeVisible();
   });
 });

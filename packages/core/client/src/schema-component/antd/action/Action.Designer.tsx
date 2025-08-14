@@ -7,25 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { ArrayTable } from '@formily/antd-v5';
-import { Field, onFieldValueChange } from '@formily/core';
-import { ISchema, useField, useFieldSchema, useForm, useFormEffects } from '@formily/react';
+import { ISchema, useField, useFieldSchema, useForm } from '@formily/react';
 import { isValid, uid } from '@formily/shared';
-import { Alert, Flex, ModalProps, Tag } from 'antd';
-import React, { useCallback, useMemo, useState } from 'react';
+import { ModalProps, Select } from 'antd';
+import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RemoteSelect, useCompile, useDesignable } from '../..';
-import { isInitializersSame, useApp } from '../../../application';
-import { usePlugin } from '../../../application/hooks';
+import { useCompile, useDesignable } from '../..';
+import { isInitializersSame, useApp, usePlugin } from '../../../application';
+import { useGlobalVariable } from '../../../application/hooks/useGlobalVariable';
 import { SchemaSettingOptions, SchemaSettings } from '../../../application/schema-settings';
 import { useSchemaToolbar } from '../../../application/schema-toolbar';
-import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
+import { useCollectionManager_deprecated, useCollection_deprecated } from '../../../collection-manager';
 import {
-  joinCollectionName,
-  useCollectionManager_deprecated,
-  useCollection_deprecated,
-} from '../../../collection-manager';
-import { DataSourceProvider, useDataSourceKey } from '../../../data-source';
+  highlightBlock,
+  startScrollEndTracking,
+  stopScrollEndTracking,
+  unhighlightBlock,
+} from '../../../filter-provider/highlightBlock';
 import { FlagProvider } from '../../../flag-provider';
 import { SaveMode } from '../../../modules/actions/submit/createSubmitActionSettings';
 import { useOpenModeContext } from '../../../modules/popup/OpenModeProvider';
@@ -41,8 +39,12 @@ import {
   SchemaSettingsSwitchItem,
 } from '../../../schema-settings/SchemaSettings';
 import { DefaultValueProvider } from '../../../schema-settings/hooks/useIsAllowToSetDefaultValue';
+import { useAllDataBlocks } from '../page/AllDataBlocksProvider';
 import { useLinkageAction } from './hooks';
+import { useAfterSuccessOptions } from './hooks/useGetAfterSuccessVariablesOptions';
 import { requestSettingsSchema } from './utils';
+import { useVariableOptions } from '../../../schema-settings/VariableInput/hooks/useVariableOptions';
+import { useCollectionRecordData } from '../../../data-source';
 
 const MenuGroup = (props) => {
   return props.children;
@@ -69,7 +71,6 @@ export function ButtonEditor(props) {
               title: t('Button title'),
               default: fieldSchema.title,
               'x-component-props': {},
-              // description: `原字段标题：${collectionField?.uiSchema?.title}`,
             },
             icon: {
               'x-decorator': 'FormItem',
@@ -77,8 +78,24 @@ export function ButtonEditor(props) {
               title: t('Button icon'),
               default: fieldSchema?.['x-component-props']?.icon,
               'x-component-props': {},
-              'x-visible': !isLink,
-              // description: `原字段标题：${collectionField?.uiSchema?.title}`,
+            },
+            onlyIcon: {
+              'x-decorator': 'FormItem',
+              'x-component': 'Checkbox',
+              title: t('Icon only'),
+              default: fieldSchema?.['x-component-props']?.onlyIcon,
+              'x-component-props': {},
+              'x-visible': isLink,
+              'x-reactions': [
+                {
+                  dependencies: ['icon'],
+                  fulfill: {
+                    state: {
+                      hidden: '{{!$deps[0]}}',
+                    },
+                  },
+                },
+              ],
             },
             iconColor: {
               title: t('Color'),
@@ -107,18 +124,33 @@ export function ButtonEditor(props) {
           },
         } as ISchema
       }
-      onSubmit={({ title, icon, type, iconColor }) => {
+      onSubmit={({ title, icon, type, iconColor, onlyIcon }) => {
+        if (field.address.toString() === fieldSchema.name) {
+          field.title = title;
+          field.componentProps.iconColor = iconColor;
+          field.componentProps.icon = icon;
+          field.componentProps.danger = type === 'danger';
+          field.componentProps.type = type || field.componentProps.type;
+          field.componentProps.onlyIcon = onlyIcon;
+        } else {
+          field.form.query(new RegExp(`.${fieldSchema.name}$`)).forEach((fieldItem) => {
+            fieldItem.title = title;
+            fieldItem.componentProps.iconColor = iconColor;
+            fieldItem.componentProps.icon = icon;
+            fieldItem.componentProps.danger = type === 'danger';
+            fieldItem.componentProps.type = type || fieldItem.componentProps.type;
+            fieldItem.componentProps.onlyIcon = onlyIcon;
+          });
+        }
+
         fieldSchema.title = title;
-        field.title = title;
-        field.componentProps.iconColor = iconColor;
-        field.componentProps.icon = icon;
-        field.componentProps.danger = type === 'danger';
-        field.componentProps.type = type || field.componentProps.type;
         fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
         fieldSchema['x-component-props'].iconColor = iconColor;
         fieldSchema['x-component-props'].icon = icon;
         fieldSchema['x-component-props'].danger = type === 'danger';
         fieldSchema['x-component-props'].type = type || field.componentProps.type;
+        fieldSchema['x-component-props'].onlyIcon = onlyIcon;
+
         dn.emit('patch', {
           schema: {
             ['x-uid']: fieldSchema['x-uid'],
@@ -166,6 +198,13 @@ export function AssignedFieldValues() {
     'x-component': 'Grid',
     'x-initializer': 'assignFieldValuesForm:configureFields',
   };
+  if (fieldSchema['x-template-uid']) {
+    initialSchema['x-template-root-ref'] = {
+      'x-template-uid': fieldSchema['x-template-uid'],
+      'x-path': 'x-action-settings.schemaUid',
+    };
+  }
+
   const tips = {
     'customize:update': t(
       'After clicking the custom button, the following fields of the current record will be saved according to the following form.',
@@ -251,14 +290,121 @@ export function SkipValidation() {
     />
   );
 }
+
+const fieldNames = {
+  value: 'value',
+  label: 'label',
+};
+const useVariableProps = (environmentVariables) => {
+  const scope = useAfterSuccessOptions();
+  return {
+    scope: [environmentVariables, ...scope].filter(Boolean),
+    fieldNames,
+  };
+};
+
+const hideDialog = (dialogClassName: string) => {
+  const dialogMask = document.querySelector<HTMLElement>(`.${dialogClassName} > .ant-modal-mask`);
+  const dialogWrap = document.querySelector<HTMLElement>(`.${dialogClassName} > .ant-modal-wrap`);
+  if (dialogMask) {
+    dialogMask.style.opacity = '0';
+    dialogMask.style.transition = 'opacity 0.5s ease';
+  }
+  if (dialogWrap) {
+    dialogWrap.style.opacity = '0';
+    dialogWrap.style.transition = 'opacity 0.5s ease';
+  }
+};
+
+const showDialog = (dialogClassName: string) => {
+  const dialogMask = document.querySelector<HTMLElement>(`.${dialogClassName} > .ant-modal-mask`);
+  const dialogWrap = document.querySelector<HTMLElement>(`.${dialogClassName} > .ant-modal-wrap`);
+  if (dialogMask) {
+    dialogMask.style.opacity = '1';
+    dialogMask.style.transition = 'opacity 0.5s ease';
+  }
+  if (dialogWrap) {
+    dialogWrap.style.opacity = '1';
+    dialogWrap.style.transition = 'opacity 0.5s ease';
+  }
+};
+
+export const BlocksSelector = (props) => {
+  const { getAllDataBlocks } = useAllDataBlocks();
+  const allDataBlocks = getAllDataBlocks();
+  const compile = useCompile();
+  const { t } = useTranslation();
+
+  // 转换 allDataBlocks 为 Select 选项
+  const options = useMemo(() => {
+    return allDataBlocks
+      .map((block) => {
+        // 防止列表中出现已关闭的弹窗中的区块
+        if (!block.dom?.isConnected) {
+          return null;
+        }
+
+        const title = `${compile(block.collection.title)} #${block.uid.slice(0, 4)}`;
+        return {
+          label: title,
+          value: block.uid,
+          onMouseEnter() {
+            block.highlightBlock();
+            hideDialog('dialog-after-successful-submission');
+            startScrollEndTracking(block.dom, () => {
+              highlightBlock(block.dom.cloneNode(true) as HTMLElement, block.dom.getBoundingClientRect());
+            });
+          },
+          onMouseLeave() {
+            block.unhighlightBlock();
+            showDialog('dialog-after-successful-submission');
+            stopScrollEndTracking(block.dom);
+            unhighlightBlock();
+          },
+        };
+      })
+      .filter(Boolean);
+  }, [allDataBlocks, t]);
+
+  return (
+    <Select
+      value={props.value}
+      mode="multiple"
+      allowClear
+      placeholder={t('Select data blocks to refresh')}
+      options={options}
+      onChange={props.onChange}
+    />
+  );
+};
+
 export function AfterSuccess() {
   const { dn } = useDesignable();
   const { t } = useTranslation();
   const fieldSchema = useFieldSchema();
+  const { onSuccess } = fieldSchema?.['x-action-settings'] || {};
+  const environmentVariables = useGlobalVariable('$env');
+  const templatePlugin: any = usePlugin('@nocobase/plugin-block-template');
+  const isInBlockTemplateConfigPage = templatePlugin?.isInBlockTemplateConfigPage?.();
+
   return (
     <SchemaSettingsModalItem
+      dialogRootClassName="dialog-after-successful-submission"
+      width={700}
       title={t('After successful submission')}
-      initialValues={fieldSchema?.['x-action-settings']?.['onSuccess']}
+      initialValues={
+        onSuccess
+          ? {
+              actionAfterSuccess: onSuccess?.redirecting ? 'redirect' : 'previous',
+              ...onSuccess,
+            }
+          : {
+              manualClose: false,
+              redirecting: false,
+              successMessage: '{{t("Saved successfully")}}',
+              actionAfterSuccess: 'previous',
+            }
+      }
       schema={
         {
           type: 'object',
@@ -271,7 +417,7 @@ export function AfterSuccess() {
               'x-component-props': {},
             },
             manualClose: {
-              title: t('Popup close method'),
+              title: t('Message popup close method'),
               enum: [
                 { label: t('Automatic close'), value: false },
                 { label: t('Manually close'), value: true },
@@ -282,6 +428,7 @@ export function AfterSuccess() {
             },
             redirecting: {
               title: t('Then'),
+              'x-hidden': true,
               enum: [
                 { label: t('Stay on current page'), value: false },
                 { label: t('Redirect to'), value: true },
@@ -298,11 +445,43 @@ export function AfterSuccess() {
                 },
               },
             },
+            actionAfterSuccess: {
+              title: t('Action after successful submission'),
+              enum: [
+                { label: t('Stay on the current popup or page'), value: 'stay' },
+                { label: t('Return to the previous popup or page'), value: 'previous' },
+                { label: t('Redirect to'), value: 'redirect' },
+              ],
+              'x-decorator': 'FormItem',
+              'x-component': 'Radio.Group',
+              'x-component-props': {},
+              'x-reactions': {
+                target: 'redirectTo',
+                fulfill: {
+                  state: {
+                    visible: "{{$self.value==='redirect'}}",
+                  },
+                },
+              },
+            },
             redirectTo: {
               title: t('Link'),
               'x-decorator': 'FormItem',
-              'x-component': 'Input',
-              'x-component-props': {},
+              'x-component': 'Variable.TextArea',
+              // eslint-disable-next-line react-hooks/rules-of-hooks
+              'x-use-component-props': () => useVariableProps(environmentVariables),
+            },
+            blocksToRefresh: {
+              type: 'array',
+              title: t('Refresh data blocks'),
+              'x-decorator': 'FormItem',
+              'x-use-decorator-props': () => {
+                return {
+                  tooltip: t('After successful submission, the selected data blocks will be automatically refreshed.'),
+                };
+              },
+              'x-component': BlocksSelector,
+              'x-hidden': isInBlockTemplateConfigPage, // 模板配置页面暂不支持该配置
             },
           },
         } as ISchema
@@ -345,276 +524,6 @@ export function RemoveButton(
         />
       </>
     )
-  );
-}
-
-function WorkflowSelect({ formAction, buttonAction, actionType, ...props }) {
-  const { t } = useTranslation();
-  const index = ArrayTable.useIndex();
-  const { setValuesIn } = useForm();
-  const baseCollection = useCollection_deprecated();
-  const { getCollection } = useCollectionManager_deprecated();
-  const dataSourceKey = useDataSourceKey();
-  const [workflowCollection, setWorkflowCollection] = useState(joinCollectionName(dataSourceKey, baseCollection.name));
-  const compile = useCompile();
-
-  const workflowPlugin = usePlugin('workflow') as any;
-  const triggerOptions = workflowPlugin.useTriggersOptions();
-  const workflowTypes = useMemo(
-    () =>
-      triggerOptions
-        .filter((item) => {
-          return typeof item.options.isActionTriggerable === 'function' || item.options.isActionTriggerable === true;
-        })
-        .map((item) => item.value),
-    [triggerOptions],
-  );
-
-  useFormEffects(() => {
-    onFieldValueChange(`group[${index}].context`, (field) => {
-      let collection: any = baseCollection;
-      if (field.value) {
-        const paths = field.value.split('.');
-        for (let i = 0; i < paths.length && collection; i++) {
-          const path = paths[i];
-          const associationField = collection.fields.find((f) => f.name === path);
-          if (associationField) {
-            collection = getCollection(associationField.target, dataSourceKey);
-          }
-        }
-      }
-      setWorkflowCollection(joinCollectionName(dataSourceKey, collection.name));
-      setValuesIn(`group[${index}].workflowKey`, null);
-    });
-  });
-
-  const optionFilter = useCallback(
-    ({ key, type, config }) => {
-      if (key === props.value) {
-        return true;
-      }
-      const trigger = workflowPlugin.triggers.get(type);
-      if (trigger.isActionTriggerable === true) {
-        return true;
-      }
-      if (typeof trigger.isActionTriggerable === 'function') {
-        return trigger.isActionTriggerable(config, {
-          action: actionType,
-          formAction,
-          buttonAction,
-          /**
-           * @deprecated
-           */
-          direct: buttonAction === 'customize:triggerWorkflows',
-        });
-      }
-      return false;
-    },
-    [props.value, workflowPlugin.triggers, formAction, buttonAction, actionType],
-  );
-
-  return (
-    <DataSourceProvider dataSource="main">
-      <RemoteSelect
-        manual={false}
-        placeholder={t('Select workflow', { ns: 'workflow' })}
-        fieldNames={{
-          label: 'title',
-          value: 'key',
-        }}
-        service={{
-          resource: 'workflows',
-          action: 'list',
-          params: {
-            filter: {
-              type: workflowTypes,
-              enabled: true,
-              'config.collection': workflowCollection,
-            },
-          },
-        }}
-        optionFilter={optionFilter}
-        optionRender={({ label, data }) => {
-          const typeOption = triggerOptions.find((item) => item.value === data.type);
-          return typeOption ? (
-            <Flex justify="space-between">
-              <span>{label}</span>
-              <Tag color={typeOption.color}>{compile(typeOption.label)}</Tag>
-            </Flex>
-          ) : (
-            label
-          );
-        }}
-        {...props}
-      />
-    </DataSourceProvider>
-  );
-}
-
-export function WorkflowConfig() {
-  const { dn } = useDesignable();
-  const { t } = useTranslation();
-  const fieldSchema = useFieldSchema();
-  const collection = useCollection_deprecated();
-  // TODO(refactor): should refactor for getting certain action type, better from 'x-action'.
-  const formBlock = useFormBlockContext();
-  /**
-   * @deprecated
-   */
-  const actionType = formBlock?.type || fieldSchema['x-action'];
-  const formAction = formBlock?.type;
-  const buttonAction = fieldSchema['x-action'];
-
-  const description = {
-    submit: t('Support pre-action event (local mode), post-action event (local mode), and approval event here.', {
-      ns: 'workflow',
-    }),
-    'customize:save': t(
-      'Support pre-action event (local mode), post-action event (local mode), and approval event here.',
-      {
-        ns: 'workflow',
-      },
-    ),
-    'customize:update': t(
-      'Support pre-action event (local mode), post-action event (local mode), and approval event here.',
-      { ns: 'workflow' },
-    ),
-    'customize:triggerWorkflows': t(
-      'Workflow will be triggered directly once the button clicked, without data saving. Only supports to be bound with "Custom action event".',
-      { ns: '@nocobase/plugin-workflow-custom-action-trigger' },
-    ),
-    'customize:triggerWorkflows_deprecated': t(
-      '"Submit to workflow" to "Post-action event" is deprecated, please use "Custom action event" instead.',
-      { ns: 'workflow' },
-    ),
-    destroy: t('Workflow will be triggered before deleting succeeded (only supports pre-action event in local mode).', {
-      ns: 'workflow',
-    }),
-  }[fieldSchema?.['x-action']];
-
-  return (
-    <SchemaSettingsActionModalItem
-      title={t('Bind workflows', { ns: 'workflow' })}
-      scope={{
-        fieldFilter(field) {
-          return ['belongsTo', 'hasOne'].includes(field.type);
-        },
-      }}
-      components={{
-        Alert,
-        ArrayTable,
-        WorkflowSelect,
-      }}
-      schema={
-        {
-          type: 'void',
-          title: t('Bind workflows', { ns: 'workflow' }),
-          properties: {
-            description: description && {
-              type: 'void',
-              'x-component': 'Alert',
-              'x-component-props': {
-                message: description,
-                style: {
-                  marginBottom: '1em',
-                },
-              },
-            },
-            group: {
-              type: 'array',
-              'x-component': 'ArrayTable',
-              'x-decorator': 'FormItem',
-              items: {
-                type: 'object',
-                properties: {
-                  context: {
-                    type: 'void',
-                    'x-component': 'ArrayTable.Column',
-                    'x-component-props': {
-                      title: t('Trigger data context', { ns: 'workflow' }),
-                      width: 200,
-                    },
-                    properties: {
-                      context: {
-                        type: 'string',
-                        'x-decorator': 'FormItem',
-                        'x-component': 'AppendsTreeSelect',
-                        'x-component-props': {
-                          placeholder: t('Select context', { ns: 'workflow' }),
-                          popupMatchSelectWidth: false,
-                          collection: `${
-                            collection.dataSource && collection.dataSource !== 'main' ? `${collection.dataSource}:` : ''
-                          }${collection.name}`,
-                          filter: '{{ fieldFilter }}',
-                          rootOption: {
-                            label: t('Full form data', { ns: 'workflow' }),
-                            value: '',
-                          },
-                          allowClear: false,
-                          loadData: buttonAction === 'destroy' ? null : undefined,
-                        },
-                        default: '',
-                      },
-                    },
-                  },
-                  workflowKey: {
-                    type: 'void',
-                    'x-component': 'ArrayTable.Column',
-                    'x-component-props': {
-                      title: t('Workflow', { ns: 'workflow' }),
-                    },
-                    properties: {
-                      workflowKey: {
-                        type: 'number',
-                        'x-decorator': 'FormItem',
-                        'x-component': 'WorkflowSelect',
-                        'x-component-props': {
-                          placeholder: t('Select workflow', { ns: 'workflow' }),
-                          actionType,
-                          formAction,
-                          buttonAction,
-                        },
-                        required: true,
-                      },
-                    },
-                  },
-                  operations: {
-                    type: 'void',
-                    'x-component': 'ArrayTable.Column',
-                    'x-component-props': {
-                      width: 32,
-                    },
-                    properties: {
-                      remove: {
-                        type: 'void',
-                        'x-component': 'ArrayTable.Remove',
-                      },
-                    },
-                  },
-                },
-              },
-              properties: {
-                add: {
-                  type: 'void',
-                  title: t('Add workflow', { ns: 'workflow' }),
-                  'x-component': 'ArrayTable.Addition',
-                },
-              },
-            },
-          },
-        } as ISchema
-      }
-      initialValues={{ group: fieldSchema?.['x-action-settings']?.triggerWorkflows }}
-      onSubmit={({ group }) => {
-        fieldSchema['x-action-settings']['triggerWorkflows'] = group;
-        dn.emit('patch', {
-          schema: {
-            ['x-uid']: fieldSchema['x-uid'],
-            'x-action-settings': fieldSchema['x-action-settings'],
-          },
-        });
-      }}
-    />
   );
 }
 
@@ -684,7 +593,7 @@ export const actionSettingsItems: SchemaSettingOptions['items'] = [
             'duplicate',
             'customize:create',
           ].includes(fieldSchema['x-action'] || '');
-          return !isPopupAction;
+          return !isPopupAction && !fieldSchema?.['x-action-settings']?.disableSecondConFirm;
         },
       },
       {
@@ -717,14 +626,6 @@ export const actionSettingsItems: SchemaSettingOptions['items'] = [
         useVisible() {
           const fieldSchema = useFieldSchema();
           return isValid(fieldSchema?.['x-action-settings']?.onSuccess);
-        },
-      },
-      {
-        name: 'workflowConfig',
-        Component: WorkflowConfig,
-        useVisible() {
-          const fieldSchema = useFieldSchema();
-          return isValid(fieldSchema?.['x-action-settings']?.triggerWorkflows);
         },
       },
       {
@@ -812,38 +713,105 @@ export const actionSettingsItems: SchemaSettingOptions['items'] = [
     ],
   },
 ];
+
+const useSecondConFirmVariables = () => {
+  const fieldSchema = useFieldSchema();
+  const form = useForm();
+  const record = useCollectionRecordData();
+  const scope = useVariableOptions({
+    collectionField: { uiSchema: fieldSchema },
+    form,
+    record,
+    uiSchema: fieldSchema,
+    noDisabled: true,
+  });
+  return scope;
+};
 export function SecondConFirm() {
   const { dn } = useDesignable();
   const fieldSchema = useFieldSchema();
   const { t } = useTranslation();
-  const field = useField<Field>();
+  const field = useField();
+  const compile = useCompile();
 
   return (
-    <SchemaSettingsSwitchItem
+    <SchemaSettingsModalItem
       title={t('Secondary confirmation')}
-      checked={!!fieldSchema?.['x-component-props']?.confirm?.content}
-      onChange={(value) => {
-        if (!fieldSchema['x-component-props']) {
-          fieldSchema['x-component-props'] = {};
-        }
-        if (value) {
-          fieldSchema['x-component-props'].confirm = value
-            ? {
-                title: 'Perform the {{title}}',
-                content: 'Are you sure you want to perform the {{title}} action?',
-              }
-            : {};
-        } else {
-          fieldSchema['x-component-props'].confirm = {};
-        }
+      initialValues={{
+        title:
+          t(fieldSchema?.['x-component-props']?.confirm?.title, { title: compile(fieldSchema.title) }) ||
+          compile(fieldSchema?.['x-component-props']?.confirm?.title) ||
+          t('Perform the {{title}}', { title: compile(fieldSchema.title) }),
+        content:
+          t(fieldSchema?.['x-component-props']?.confirm?.content, { title: compile(fieldSchema.title) }) ||
+          compile(fieldSchema?.['x-component-props']?.confirm?.content) ||
+          t('Are you sure you want to perform the {{title}} action?', { title: compile(fieldSchema.title) }),
+      }}
+      schema={
+        {
+          type: 'object',
+          title: t('Secondary confirmation'),
+          properties: {
+            enable: {
+              'x-decorator': 'FormItem',
+              'x-component': 'Checkbox',
+              'x-content': t('Enable secondary confirmation'),
+              default:
+                fieldSchema?.['x-component-props']?.confirm?.enable !== false &&
+                !!fieldSchema?.['x-component-props']?.confirm?.content,
+              'x-component-props': {},
+            },
+            title: {
+              'x-decorator': 'FormItem',
+              'x-component': 'Variable.RawTextArea',
+              title: t('Title'),
+              'x-component-props': {
+                scope: useSecondConFirmVariables,
+              },
+              'x-reactions': {
+                dependencies: ['enable'],
+                fulfill: {
+                  state: {
+                    required: '{{$deps[0]}}',
+                  },
+                },
+              },
+            },
+            content: {
+              'x-decorator': 'FormItem',
+              'x-component': 'Variable.RawTextArea',
+              title: t('Content'),
+              'x-component-props': {
+                scope: useSecondConFirmVariables,
+              },
+              'x-reactions': {
+                dependencies: ['enable'],
+                fulfill: {
+                  state: {
+                    required: '{{$deps[0]}}',
+                  },
+                },
+              },
+            },
+          },
+        } as ISchema
+      }
+      onSubmit={({ enable, title, content }) => {
+        fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
+        fieldSchema['x-component-props'].confirm = {};
+        fieldSchema['x-component-props'].confirm.enable = enable;
+        fieldSchema['x-component-props'].confirm.title = title;
+        fieldSchema['x-component-props'].confirm.content = content;
         field.componentProps.confirm = { ...fieldSchema['x-component-props']?.confirm };
-
         dn.emit('patch', {
           schema: {
             ['x-uid']: fieldSchema['x-uid'],
-            'x-component-props': { ...fieldSchema['x-component-props'] },
+            'x-component-props': {
+              ...fieldSchema['x-component-props'],
+            },
           },
         });
+        dn.refresh();
       }}
     />
   );
@@ -865,11 +833,12 @@ export const ActionDesigner = (props) => {
     buttonEditorProps,
     linkageRulesProps,
     schemaSettings = 'ActionSettings',
+    enableDrag = true,
     ...restProps
   } = props;
   const app = useApp();
   const fieldSchema = useFieldSchema();
-  const isDraggable = fieldSchema?.parent['x-component'] !== 'CollectionField';
+  const isDraggable = fieldSchema?.parent['x-component'] !== 'CollectionField' && enableDrag;
   const settingsName = `ActionSettings:${fieldSchema['x-action']}`;
   const defaultActionSettings = schemaSettings || 'ActionSettings';
   const hasAction = app.schemaSettingsManager.has(settingsName);

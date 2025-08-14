@@ -9,6 +9,7 @@
 
 import Trigger from '..';
 import type Plugin from '../../Plugin';
+import { WorkflowModel } from '../../types';
 import DateFieldScheduleTrigger from './DateFieldScheduleTrigger';
 import StaticScheduleTrigger from './StaticScheduleTrigger';
 import { SCHEDULE_MODE } from './utils';
@@ -45,6 +46,14 @@ export default class ScheduleTrigger extends Trigger {
     }
   }
 
+  async execute(workflow, values: any, options) {
+    const mode = workflow.config.mode;
+    const trigger = this.getTrigger(mode);
+    if (trigger) {
+      return trigger.execute(workflow, values, options);
+    }
+  }
+
   // async validateEvent(workflow: WorkflowModel, context: any, options: Transactionable): Promise<boolean> {
   //   if (!context.date) {
   //     return false;
@@ -58,4 +67,16 @@ export default class ScheduleTrigger extends Trigger {
   //   });
   //   return !existed.length;
   // }
+
+  validateContext(values, workflow: WorkflowModel) {
+    const { mode } = workflow.config;
+    const trigger = this.getTrigger(mode);
+    if (!trigger) {
+      return {
+        mode: 'Mode in invalid',
+      };
+    }
+
+    return trigger.validateContext?.(values, workflow);
+  }
 }

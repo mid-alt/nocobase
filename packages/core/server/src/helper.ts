@@ -16,17 +16,17 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import i18next from 'i18next';
 import bodyParser from 'koa-bodyparser';
-import { resolve } from 'path';
 import { createHistogram, RecordableHistogram } from 'perf_hooks';
 import Application, { ApplicationOptions } from './application';
 import { dataWrapping } from './middlewares/data-wrapping';
+import { extractClientIp } from './middlewares/extract-client-ip';
 
 import { i18n } from './middlewares/i18n';
 
 export function createI18n(options: ApplicationOptions) {
   const instance = i18next.createInstance();
   instance.init({
-    lng: 'en-US',
+    lng: process.env.INIT_LANG || 'en-US',
     resources: {},
     keySeparator: false,
     nsSeparator: false,
@@ -40,16 +40,24 @@ export function createResourcer(options: ApplicationOptions) {
 }
 
 export function registerMiddlewares(app: Application, options: ApplicationOptions) {
-  app.use(async (ctx, next) => {
-    app.context.reqId = randomUUID();
-    await next();
-  });
+  app.use(
+    async function generateReqId(ctx, next) {
+      app.context.reqId = randomUUID();
+      await next();
+    },
+    { tag: 'generateReqId' },
+  );
+
+  app.use(app.auditManager.middleware(), { tag: 'audit', after: 'generateReqId' });
 
   app.use(requestLogger(app.name, app.requestLogger, options.logger?.request), { tag: 'logger' });
 
   app.use(
     cors({
       exposeHeaders: ['content-disposition'],
+      origin(ctx) {
+        return ctx.get('origin');
+      },
       ...options.cors,
     }),
     {
@@ -59,7 +67,7 @@ export function registerMiddlewares(app: Application, options: ApplicationOption
   );
 
   if (options.bodyParser !== false) {
-    const bodyLimit = '10mb';
+    const bodyLimit = getBodyLimit();
     app.use(
       bodyParser({
         jsonLimit: bodyLimit,
@@ -74,7 +82,7 @@ export function registerMiddlewares(app: Application, options: ApplicationOption
     );
   }
 
-  app.use(async (ctx, next) => {
+  app.use(async function getBearerToken(ctx, next) {
     ctx.getBearerToken = () => {
       const token = ctx.get('Authorization').replace(/^Bearer\s+/gi, '');
       return token || ctx.query.token;
@@ -82,13 +90,15 @@ export function registerMiddlewares(app: Application, options: ApplicationOption
     await next();
   });
 
-  app.use(i18n, { tag: 'i18n', after: 'cors' });
+  app.use(i18n, { tag: 'i18n', before: 'cors' });
 
   if (options.dataWrapping !== false) {
-    app.use(dataWrapping(), { tag: 'dataWrapping', after: 'i18n' });
+    app.use(dataWrapping(), { tag: 'dataWrapping', after: 'cors' });
   }
 
   app.use(app.dataSourceManager.middleware(), { tag: 'dataSource', after: 'dataWrapping' });
+
+  app.use(extractClientIp(), { tag: 'extractClientIp', before: 'cors' });
 }
 
 export const createAppProxy = (app: Application) => {
@@ -121,8 +131,7 @@ export const getCommandFullName = (command: Command) => {
 
 /* istanbul ignore next -- @preserve */
 export const tsxRerunning = async () => {
-  const file = resolve(process.cwd(), 'storage/app.watch.ts');
-  await fs.promises.writeFile(file, `export const watchId = '${uid()}';`, 'utf-8');
+  await fs.promises.writeFile(process.env.WATCH_FILE, `export const watchId = '${uid()}';`, 'utf-8');
 };
 
 /* istanbul ignore next -- @preserve */
@@ -157,3 +166,7 @@ export const enablePerfHooks = (app: Application) => {
 
   app.acl.allow('perf', '*', 'public');
 };
+
+export function getBodyLimit() {
+  return process.env.REQUEST_BODY_LIMIT || '10mb';
+}

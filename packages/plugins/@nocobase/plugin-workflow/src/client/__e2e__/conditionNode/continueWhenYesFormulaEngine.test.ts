@@ -64,11 +64,11 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -80,7 +80,14 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   const conditionalRightConstant = faker.string.alphanumeric(10);
   await page.waitForTimeout(500);
-  await page.keyboard.type(`=='${conditionalRightConstant}'`, { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`=='${conditionalRightConstant}'`, { delay: 50 });
   await expect(conditionNode.conditionExpressionEditBox).toHaveText(
     `Trigger variables / Trigger data / ${triggerNodeFieldDisplayName}=='${conditionalRightConstant}'`,
   );
@@ -95,7 +102,7 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -147,11 +154,11 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -166,7 +173,14 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
     .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
     .getByLabel('textbox')
     .press('ControlOrMeta+ArrowRight');
-  await page.keyboard.type(`=='${conditionalRightConstant}'`, { delay: 100 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`=='${conditionalRightConstant}'`, { delay: 50 });
   await expect(conditionNode.conditionExpressionEditBox).toHaveText(
     `Trigger variables / Trigger data / ${triggerNodeFieldDisplayName}=='${conditionalRightConstant}'`,
   );
@@ -181,7 +195,7 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -231,11 +245,11 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -247,7 +261,14 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   const conditionalRightConstant = faker.string.alphanumeric(10);
   await page.waitForTimeout(500);
-  await page.keyboard.type(`!='${conditionalRightConstant}'`, { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`!='${conditionalRightConstant}'`, { delay: 50 });
   await expect(conditionNode.conditionExpressionEditBox).toHaveText(
     `Trigger variables / Trigger data / ${triggerNodeFieldDisplayName}!='${conditionalRightConstant}'`,
   );
@@ -261,7 +282,7 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -313,11 +334,11 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -329,7 +350,14 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   const conditionalRightConstant = faker.string.alphanumeric(10);
   await page.waitForTimeout(500);
-  await page.keyboard.type(`!='${conditionalRightConstant}'`, { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`!='${conditionalRightConstant}'`, { delay: 50 });
   await expect(conditionNode.conditionExpressionEditBox).toHaveText(
     `Trigger variables / Trigger data / ${triggerNodeFieldDisplayName}!='${conditionalRightConstant}'`,
   );
@@ -344,7 +372,7 @@ test('Collection event Add Data Trigger, Formula engine, determines that the tri
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -421,11 +449,11 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -437,7 +465,14 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
   await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   await page.waitForTimeout(500);
-  await page.keyboard.type('==', { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`==`, { delay: 50 });
   await page.getByLabel('variable-button').click();
   await page.getByRole('menuitemcheckbox', { name: 'Node result' }).click();
   await page.getByRole('menuitemcheckbox', { name: preQueryRecordNodeTitle }).click();
@@ -454,7 +489,7 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -532,11 +567,11 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -548,7 +583,14 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
   await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   await page.waitForTimeout(500);
-  await page.keyboard.type('==', { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`==`, { delay: 50 });
   await page.getByLabel('variable-button').click();
   await page.getByRole('menuitemcheckbox', { name: 'Node result' }).click();
   await page.getByRole('menuitemcheckbox', { name: preQueryRecordNodeTitle }).click();
@@ -565,7 +607,7 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -641,11 +683,11 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -657,7 +699,14 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
   await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   await page.waitForTimeout(500);
-  await page.keyboard.type('!=', { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`!=`, { delay: 50 });
   await page.getByLabel('variable-button').click();
   await page.getByRole('menuitemcheckbox', { name: 'Node result' }).click();
   await page.getByRole('menuitemcheckbox', { name: preQueryRecordNodeTitle }).click();
@@ -674,7 +723,7 @@ test('Collection event add data trigger, Formula engine, determine trigger node 
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -752,11 +801,11 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('rejectOnFalse').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionYesNode(page, conditionNodeName);
@@ -768,7 +817,14 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
   await page.getByRole('menuitemcheckbox', { name: 'Trigger data' }).click();
   await page.getByRole('menuitemcheckbox', { name: triggerNodeFieldDisplayName }).click();
   await page.waitForTimeout(500);
-  await page.keyboard.type('!=', { delay: 50 });
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .press('ArrowRight');
+  await page
+    .getByLabel('block-item-WorkflowVariableTextArea-workflows-Condition expression')
+    .getByLabel('textbox')
+    .pressSequentially(`!=`, { delay: 50 });
   await page.getByLabel('variable-button').click();
   await page.getByRole('menuitemcheckbox', { name: 'Node result' }).click();
   await page.getByRole('menuitemcheckbox', { name: preQueryRecordNodeTitle }).click();
@@ -785,7 +841,7 @@ test('Collection event add data trigger, Formula engine, determine the trigger n
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));

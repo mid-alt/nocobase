@@ -25,6 +25,35 @@ import { setDefaultSortingRulesSchemaSettingsItem } from '../../../../schema-set
 import { setTheDataScopeSchemaSettingsItem } from '../../../../schema-settings/setTheDataScopeSchemaSettingsItem';
 import { useBlockTemplateContext } from '../../../../schema-templates/BlockTemplateProvider';
 import { setDataLoadingModeSettingsItem } from '../details-multi/setDataLoadingModeSettingsItem';
+import { SchemaSettingsItemType } from '../../../../application';
+import { SchemaSettingsLinkageRules } from '../../../../schema-settings';
+import { LinkageRuleCategory } from '../../../../schema-settings/LinkageRules/type';
+
+const enabledIndexColumn: SchemaSettingsItemType = {
+  name: 'enableIndexColumn',
+  type: 'switch',
+  useComponentProps: () => {
+    const field = useField();
+    const fieldSchema = useFieldSchema();
+    const { t } = useTranslation();
+    const { dn } = useDesignable();
+    return {
+      title: t('Enable index column'),
+      checked: field.decoratorProps.enableIndexColumn !== false,
+      onChange: async (enableIndexColumn) => {
+        field.decoratorProps = field.decoratorProps || {};
+        field.decoratorProps.enableIndexColumn = enableIndexColumn;
+        fieldSchema['x-decorator-props'].enableIndexColumn = enableIndexColumn;
+        dn.emit('patch', {
+          schema: {
+            ['x-uid']: fieldSchema['x-uid'],
+            'x-decorator-props': fieldSchema['x-decorator-props'],
+          },
+        });
+      },
+    };
+  },
+};
 
 export const tableBlockSettings = new SchemaSettings({
   name: 'blockSettings:table',
@@ -36,6 +65,19 @@ export const tableBlockSettings = new SchemaSettings({
     {
       name: 'setTheBlockHeight',
       Component: SchemaSettingsBlockHeightItem,
+    },
+    {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { name } = useCollection_deprecated();
+        const { t } = useTranslation();
+        return {
+          collectionName: name,
+          title: t('Block Linkage rules'),
+          category: LinkageRuleCategory.block,
+        };
+      },
     },
     {
       name: 'treeTable',
@@ -111,7 +153,6 @@ export const tableBlockSettings = new SchemaSettings({
         const { resource } = field.decoratorProps;
         const collectionField = resource && getCollectionField(resource);
         const api = useAPIClient();
-
         return {
           title: t('Enable drag and drop sorting'),
           checked: field.decoratorProps.dragSort,
@@ -147,6 +188,7 @@ export const tableBlockSettings = new SchemaSettings({
         return field.decoratorProps.dragSort;
       },
     },
+    enabledIndexColumn,
     setTheDataScopeSchemaSettingsItem,
     setDefaultSortingRulesSchemaSettingsItem,
     setDataLoadingModeSettingsItem,
@@ -188,6 +230,40 @@ export const tableBlockSettings = new SchemaSettings({
       },
     },
     {
+      name: 'tableSize',
+      type: 'select',
+      useComponentProps() {
+        const field = useField();
+        const fieldSchema = useFieldSchema();
+        const { t } = useTranslation();
+        const { dn } = useDesignable();
+        const schema = fieldSchema.reduceProperties((_, s) => {
+          if (s['x-component'] === 'TableV2') {
+            return s;
+          }
+        }, null);
+        return {
+          title: t('Table size'),
+          value: schema?.['x-component-props']?.size || 'small',
+          options: [
+            { label: t('Large'), value: 'large' },
+            { label: t('Middle'), value: 'middle' },
+            { label: t('Small'), value: 'small' },
+          ],
+          onChange: (size) => {
+            schema['x-component-props'] = schema['x-component-props'] || {};
+            schema['x-component-props']['size'] = size;
+            dn.emit('patch', {
+              schema: {
+                ['x-uid']: schema['x-uid'],
+                'x-component-props': schema['x-component-props'],
+              },
+            });
+          },
+        };
+      },
+    },
+    {
       name: 'ConnectDataBlocks',
       Component: SchemaSettingsConnectDataBlocks,
       useComponentProps() {
@@ -201,6 +277,7 @@ export const tableBlockSettings = new SchemaSettings({
     {
       name: 'divider',
       type: 'divider',
+      sort: 7000,
       useVisible: () => {
         const fieldSchema = useFieldSchema();
         const supportTemplate = !fieldSchema?.['x-decorator-props']?.disableTemplate;
@@ -209,6 +286,7 @@ export const tableBlockSettings = new SchemaSettings({
     },
     {
       name: 'ConvertReferenceToDuplicate',
+      sort: 8000,
       Component: SchemaSettingsTemplate,
       useComponentProps() {
         const { name } = useCollection_deprecated();
@@ -231,10 +309,12 @@ export const tableBlockSettings = new SchemaSettings({
     {
       name: 'divider2',
       type: 'divider',
+      sort: 9000,
     },
     {
       name: 'delete',
       type: 'remove',
+      sort: 10000,
       useComponentProps: () => {
         return {
           removeParentsIfNoChildren: true,

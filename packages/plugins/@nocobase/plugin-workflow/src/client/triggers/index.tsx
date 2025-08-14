@@ -28,7 +28,7 @@ import {
   useResourceActionContext,
 } from '@nocobase/client';
 
-import WorkflowPlugin from '..';
+import WorkflowPlugin, { useWorkflowExecuted } from '..';
 import { useFlowContext } from '../FlowContext';
 import { DrawerDescription } from '../components/DrawerDescription';
 import { NAMESPACE, lang } from '../locale';
@@ -39,11 +39,12 @@ function useUpdateConfigAction() {
   const form = useForm();
   const api = useAPIClient();
   const { workflow } = useFlowContext() ?? {};
+  const executed = useWorkflowExecuted();
   const ctx = useActionContext();
   const { refresh } = useResourceActionContext();
   return {
     async run() {
-      if (workflow.executed) {
+      if (executed) {
         message.error(lang('Trigger in executed workflow cannot be modified'));
         return;
       }
@@ -67,7 +68,11 @@ export abstract class Trigger {
   description?: string;
   // group: string;
   useVariables?(config: Record<string, any>, options?: UseVariableOptions): VariableOption[];
-  fieldset: { [key: string]: ISchema };
+  fieldset: Record<string, ISchema>;
+  triggerFieldset?: Record<string, ISchema>;
+  validate(config: Record<string, any>): boolean {
+    return true;
+  }
   view?: ISchema;
   scope?: { [key: string]: any };
   components?: { [key: string]: any };
@@ -138,12 +143,13 @@ function TriggerExecution() {
                 'x-decorator': 'FormItem',
                 'x-component': 'Input.JSON',
                 'x-component-props': {
-                  className: css`
-                    padding: 1em;
-                    background-color: #f3f3f3;
-                  `,
+                  className: styles.nodeJobResultClass,
+                  autoSize: {
+                    minRows: 4,
+                    maxRows: 32,
+                  },
                 },
-                'x-read-pretty': true,
+                'x-disabled': true,
               },
             },
           },
@@ -166,6 +172,7 @@ export const TriggerConfig = () => {
   const { styles } = useStyles();
   const compile = useCompile();
   const trigger = useTrigger();
+  const executed = useWorkflowExecuted();
 
   useEffect(() => {
     if (workflow) {
@@ -177,7 +184,7 @@ export const TriggerConfig = () => {
     const values = cloneDeep(workflow.config);
     return createForm({
       initialValues: values,
-      disabled: workflow.executed,
+      disabled: Boolean(executed),
     });
   }, [workflow]);
 
@@ -224,7 +231,6 @@ export const TriggerConfig = () => {
     }
   }, []);
 
-  const detailText = workflow.executed ? '{{t("View")}}' : '{{t("Configure")}}';
   const titleText = lang('Trigger');
 
   if (!trigger) {
@@ -240,8 +246,10 @@ export const TriggerConfig = () => {
           className={cx(styles.nodeCardClass, 'invalid')}
           onClick={onOpenDrawer}
         >
-          <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
-            <Tag color="error">{lang('Unknown trigger')}</Tag>
+          <div className={styles.nodeHeaderClass}>
+            <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
+              <Tag color="error">{lang('Unknown trigger')}</Tag>
+            </div>
           </div>
           <div className="workflow-node-title">
             <Input.TextArea value={editingTitle} disabled autoSize />
@@ -260,11 +268,16 @@ export const TriggerConfig = () => {
       className={cx(styles.nodeCardClass)}
       onClick={onOpenDrawer}
     >
-      <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
-        <Tag color="gold">
-          <ThunderboltOutlined />
-          <span className="type">{compile(trigger.title)}</span>
-        </Tag>
+      <div className={styles.nodeHeaderClass}>
+        <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
+          <Tag color="gold">
+            <ThunderboltOutlined />
+            <span className="type">{compile(trigger.title)}</span>
+          </Tag>
+        </div>
+        <div className="workflow-node-actions">
+          <TriggerExecution />
+        </div>
       </div>
       <div className="workflow-node-title">
         <Input.TextArea
@@ -272,10 +285,9 @@ export const TriggerConfig = () => {
           onChange={(ev) => setEditingTitle(ev.target.value)}
           onBlur={(ev) => onChangeTitle(ev.target.value)}
           autoSize
-          disabled={workflow.executed}
+          disabled={Boolean(executed)}
         />
       </div>
-      <TriggerExecution />
       <ActionContextProvider
         value={{
           visible: editingConfig,
@@ -295,15 +307,15 @@ export const TriggerConfig = () => {
               name: `workflow-trigger-${workflow.id}`,
               type: 'void',
               properties: {
-                config: {
-                  type: 'void',
-                  'x-content': detailText,
-                  'x-component': Button,
-                  'x-component-props': {
-                    type: 'link',
-                    className: 'workflow-node-config-button',
-                  },
-                },
+                // config: {
+                //   type: 'void',
+                //   'x-content': detailText,
+                //   'x-component': Button,
+                //   'x-component-props': {
+                //     type: 'link',
+                //     className: 'workflow-node-config-button',
+                //   },
+                // },
                 drawer: {
                   type: 'void',
                   title: titleText,
@@ -338,7 +350,7 @@ export const TriggerConfig = () => {
                       properties: fieldset,
                     },
                     actions: {
-                      ...(workflow.executed
+                      ...(executed
                         ? {}
                         : {
                             type: 'void',

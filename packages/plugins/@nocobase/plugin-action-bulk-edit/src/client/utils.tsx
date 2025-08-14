@@ -7,10 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { SchemaExpressionScopeContext, useField, useForm } from '@formily/react';
+import { SchemaExpressionScopeContext, useField, useFieldSchema, useForm } from '@formily/react';
 import {
   SchemaInitializerItemType,
-  TableFieldResource,
   useActionContext,
   useBlockRequestContext,
   useCollectionManager_deprecated,
@@ -19,6 +18,7 @@ import {
   useNavigateNoUpdate,
   useRemoveGridFormItem,
   useTableBlockContext,
+  useTableSelectorContext,
 } from '@nocobase/client';
 import { isURL } from '@nocobase/utils/client';
 import { App, message } from 'antd';
@@ -87,15 +87,21 @@ export const useCustomizeBulkEditActionProps = () => {
   const compile = useCompile();
   const actionField = useField();
   const tableBlockContext = useTableBlockContext();
+  const tableSelectorContext = useTableSelectorContext();
   const { modal } = App.useApp();
-
-  const { rowKey } = tableBlockContext;
   const selectedRecordKeys =
-    tableBlockContext.field?.data?.selectedRowKeys ?? expressionScope?.selectedRecordKeys ?? {};
+    tableBlockContext.field?.data?.selectedRowKeys ??
+    expressionScope?.selectedRecordKeys ??
+    tableSelectorContext.field?.data?.selectedRowKeys ??
+    [];
   const { setVisible, fieldSchema: actionSchema, setSubmitted } = actionContext;
+  const fieldSchema = useFieldSchema();
   return {
     async onClick() {
-      const { onSuccess, skipValidator, updateMode } = actionSchema?.['x-action-settings'] ?? {};
+      const { updateMode } = actionSchema?.['x-action-settings'] ?? {};
+      const { onSuccess, skipValidator, triggerWorkflows } = fieldSchema?.['x-action-settings'] ?? {};
+      const { refreshDataBlockRequest } = fieldSchema?.['x-component-props'] ?? {};
+      const { manualClose, redirecting, redirectTo, successMessage, actionAfterSuccess } = onSuccess || {};
       const { filter } = __parent.service.params?.[0] ?? {};
 
       if (!skipValidator) {
@@ -105,48 +111,66 @@ export const useCustomizeBulkEditActionProps = () => {
       actionField.data = field.data || {};
       actionField.data.loading = true;
       try {
-        const updateData: { filter?: any; values: any; forceUpdate: boolean } = {
+        const updateData: {
+          filter?: any;
+          filterByTk?: any[];
+          values: any;
+          forceUpdate: boolean;
+          triggerWorkflows?: string;
+        } = {
           values: form.values,
-          filter,
           forceUpdate: false,
+          triggerWorkflows: triggerWorkflows?.length
+            ? triggerWorkflows.map((row) => [row.workflowKey, row.context].filter(Boolean).join('!')).join(',')
+            : undefined,
         };
         if (updateMode === 'selected') {
           if (!selectedRecordKeys?.length) {
             message.error(t('Please select the records to be updated'));
             return;
           }
-          updateData.filter = { $and: [{ [rowKey || 'id']: { $in: selectedRecordKeys } }] };
+          updateData.filterByTk = selectedRecordKeys;
+        } else {
+          updateData.filter = filter;
         }
-        if (!updateData.filter) {
+        if (!updateData.filter && !updateData.filterByTk) {
           updateData.forceUpdate = true;
         }
         await resource.update(updateData);
         actionField.data.loading = false;
-        if (!(resource instanceof TableFieldResource)) {
-          __parent?.__parent?.service?.refresh?.();
+
+        if (actionAfterSuccess === 'previous' || (!actionAfterSuccess && redirecting !== true)) {
+          setVisible?.(false);
         }
-        // __parent?.service?.refresh?.();
-        setVisible?.(false);
-        setSubmitted(true);
-        if (!onSuccess?.successMessage) {
+        if (refreshDataBlockRequest !== false) {
+          setSubmitted(true);
+        }
+        if (!successMessage) {
+          if (((redirecting && !actionAfterSuccess) || actionAfterSuccess === 'redirect') && redirectTo) {
+            if (isURL(redirectTo)) {
+              window.location.href = redirectTo;
+            } else {
+              navigate(redirectTo);
+            }
+          }
           return;
         }
-        if (onSuccess?.manualClose) {
+        if (manualClose) {
           modal.success({
-            title: compile(onSuccess?.successMessage),
+            title: compile(successMessage),
             onOk: async () => {
               await form.reset();
-              if (onSuccess?.redirecting && onSuccess?.redirectTo) {
-                if (isURL(onSuccess.redirectTo)) {
-                  window.location.href = onSuccess.redirectTo;
+              if (((redirecting && !actionAfterSuccess) || actionAfterSuccess === 'redirect') && redirectTo) {
+                if (isURL(redirectTo)) {
+                  window.location.href = redirectTo;
                 } else {
-                  navigate(onSuccess.redirectTo);
+                  navigate(redirectTo);
                 }
               }
             },
           });
         } else {
-          message.success(compile(onSuccess?.successMessage));
+          message.success(compile(successMessage));
         }
       } finally {
         actionField.data.loading = false;

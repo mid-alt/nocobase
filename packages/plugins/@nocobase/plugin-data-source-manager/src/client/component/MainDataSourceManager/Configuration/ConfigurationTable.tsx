@@ -10,28 +10,26 @@
 import { useForm } from '@formily/react';
 import { action } from '@formily/reactive';
 import { uid } from '@formily/shared';
-import React, { useContext, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-// import { CollectionFieldsTable } from '.';
 import {
-  useAPIClient,
-  useCurrentAppInfo,
-  useRecord,
-  useApp,
+  AddSubFieldAction,
+  CollectionCategoriesContext,
+  DataSourceContext_deprecated,
+  EditSubFieldAction,
+  FieldSummary,
   SchemaComponent,
   SchemaComponentContext,
-  useCompile,
+  TemplateSummary,
+  useAPIClient,
+  useApp,
   useCancelAction,
   useCollectionManager_deprecated,
-  DataSourceContext_deprecated,
-  AddSubFieldAction,
-  EditSubFieldAction,
-  CollectionCategoriesContext,
-  FieldSummary,
-  TemplateSummary,
-  useRequest,
-  useCollectionRecordData,
+  useCompile,
+  useCurrentAppInfo,
+  useRecord,
 } from '@nocobase/client';
+import { getPickerFormat } from '@nocobase/utils/client';
+import React, { useContext, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CollectionFields } from './CollectionFields';
 import { collectionSchema } from './schemas/collections';
 
@@ -106,7 +104,9 @@ export const ConfigurationTable = () => {
   const { interfaces, getCollections, getCollection } = useCollectionManager_deprecated();
   const {
     data: { database },
-  } = useCurrentAppInfo();
+  } = useCurrentAppInfo() || {
+    data: { database: {} as any },
+  };
 
   const data = useContext(CollectionCategoriesContext);
   const api = useAPIClient();
@@ -136,6 +136,10 @@ export const ConfigurationTable = () => {
       if (isFieldInherits && item.template === 'view') {
         return false;
       }
+      //目标表不支持联合主键表
+      if (field.props.name === 'target' && Array.isArray(item.filterTargetKey) && item.filterTargetKey.length > 1) {
+        return false;
+      }
       const templateIncluded = !targetScope?.template || targetScope.template.includes(item.template);
       const nameIncluded = !targetScope?.[field.props?.name] || targetScope[field.props.name].includes(item.name);
       return templateIncluded && nameIncluded;
@@ -159,17 +163,17 @@ export const ConfigurationTable = () => {
         const schema = item.schema;
         return {
           label: schema ? `${schema}.${compile(item.name)}` : item.name,
-          value: schema ? `${schema}_${item.name}` : item.name,
+          value: schema ? `${schema}@${item.name}` : item.name,
         };
       });
     });
   };
 
   const loadFilterTargetKeys = async (field) => {
-    const { name } = field.form.values;
-    const { fields } = getCollection(name);
+    const { name, fields: targetFields } = field.form.values;
+    const { fields } = getCollection(name) || {};
     return Promise.resolve({
-      data: fields,
+      data: fields || targetFields,
     }).then(({ data }) => {
       return data
         .filter((field) => {
@@ -208,8 +212,10 @@ export const ConfigurationTable = () => {
   };
 
   const ctx = useContext(SchemaComponentContext);
+  const schemaComponentContext = useMemo(() => ({ ...ctx, designable: false }), [ctx]);
+
   return (
-    <SchemaComponentContext.Provider value={{ ...ctx, designable: false }}>
+    <SchemaComponentContext.Provider value={schemaComponentContext}>
       <SchemaComponent
         schema={collectionSchema}
         components={{
@@ -235,6 +241,7 @@ export const ConfigurationTable = () => {
           interfaces,
           enableInherits: database?.dialect === 'postgres',
           isPG: database?.dialect === 'postgres',
+          getPickerFormat,
         }}
       />
     </SchemaComponentContext.Provider>

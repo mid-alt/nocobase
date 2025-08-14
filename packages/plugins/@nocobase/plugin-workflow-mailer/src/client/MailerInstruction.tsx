@@ -7,7 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { MailOutlined } from '@ant-design/icons';
 import { ArrayItems } from '@formily/antd-v5';
+import React from 'react';
 
 import { SchemaComponentContext, css } from '@nocobase/client';
 import {
@@ -32,6 +34,7 @@ export default class extends Instruction {
   type = 'mailer';
   group = 'extended';
   description = `{{t("Send email. You can use the variables in the upstream nodes as receivers, subject and content of the email.", { ns: "${NAMESPACE}" })}}`;
+  icon = (<MailOutlined style={{}} />);
   fieldset = {
     provider: {
       type: 'object',
@@ -109,6 +112,7 @@ export default class extends Instruction {
                     secure: {
                       type: 'boolean',
                       title: `{{t("Secure", { ns: "${NAMESPACE}" })}}`,
+                      description: `{{t("In most cases, if using port 465, set it to true; otherwise, set it to false.", { ns: "${NAMESPACE}" })}}`,
                       'x-decorator': 'FormItem',
                       'x-component': 'WorkflowVariableInput',
                       'x-component-props': {

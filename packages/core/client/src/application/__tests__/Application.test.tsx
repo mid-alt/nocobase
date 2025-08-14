@@ -13,11 +13,11 @@ import MockAdapter from 'axios-mock-adapter';
 import React, { Component } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { describe } from 'vitest';
+import { CollectionFieldInterface } from '../../data-source';
 import { OpenModeProvider } from '../../modules/popup/OpenModeProvider';
 import { Application } from '../Application';
 import { Plugin } from '../Plugin';
 import { useApp } from '../hooks';
-import { CollectionFieldInterface } from '../../data-source';
 
 describe('Application', () => {
   beforeAll(() => {
@@ -82,6 +82,32 @@ describe('Application', () => {
       });
       expect(app.getApiUrl('/test/bar')).toBe('https://123.1.2.3:13000/foo/api/test/bar');
       expect(app.getApiUrl('test/bar')).toBe('https://123.1.2.3:13000/foo/api/test/bar');
+    });
+  });
+
+  describe('getHref', () => {
+    it('default', () => {
+      const app = new Application({});
+      expect(app.getHref('test')).toBe('/test');
+      expect(app.getHref('/test')).toBe('/test');
+    });
+
+    it('custom', () => {
+      const app = new Application({ publicPath: '/nocobase' });
+      expect(app.getHref('/test')).toBe('/nocobase/test');
+      expect(app.getHref('test')).toBe('/nocobase/test');
+    });
+
+    it('sub app', () => {
+      const app = new Application({ name: 'sub1' });
+      expect(app.getHref('test')).toBe('/apps/sub1/test');
+      expect(app.getHref('/test')).toBe('/apps/sub1/test');
+    });
+
+    it('sub app', () => {
+      const app = new Application({ name: 'sub1', publicPath: '/nocobase/' });
+      expect(app.getHref('test')).toBe('/nocobase/apps/sub1/test');
+      expect(app.getHref('/test')).toBe('/nocobase/apps/sub1/test');
     });
   });
 
@@ -467,7 +493,7 @@ describe('Application', () => {
         .toMatchInlineSnapshot(`
         [
           {
-            "label": "TestComponent",
+            "label": "{{t("TestComponent")}}",
             "useProps": [Function],
             "value": "TestComponent",
           },
@@ -477,6 +503,184 @@ describe('Application', () => {
           },
         ]
       `);
+    });
+  });
+
+  describe('variables', () => {
+    it('should register a variable', () => {
+      const app = new Application({});
+
+      app.registerVariable({
+        name: 'test',
+        useOption: () => ({
+          option: {
+            value: 'test',
+            label: '测试变量',
+          },
+          visible: true,
+        }),
+        useCtx: () => ({ value: 'test-value' }),
+      });
+
+      const variables = app.getVariables();
+      expect(variables).toHaveLength(1);
+      expect(variables[0]).toEqual({
+        name: 'test',
+        useOption: expect.any(Function),
+        useCtx: expect.any(Function),
+      });
+
+      const optionResult = variables[0].useOption();
+      expect(optionResult.option).toEqual({
+        value: 'test',
+        label: '测试变量',
+      });
+      expect(optionResult.visible).toBe(true);
+
+      const ctxResult = variables[0].useCtx();
+      expect(ctxResult).toEqual({ value: 'test-value' });
+    });
+
+    it('should not register duplicate variables', () => {
+      const app = new Application({});
+
+      const originalConsoleWarn = console.warn;
+      const fn = vitest.fn();
+      console.warn = fn;
+
+      app.registerVariable({
+        name: 'test',
+        useOption: () => ({
+          option: {
+            value: 'test',
+            label: '测试变量',
+          },
+        }),
+        useCtx: () => ({ value: 'test-value' }),
+      });
+
+      app.registerVariable({
+        name: 'test',
+        useOption: () => ({
+          option: {
+            value: 'test-duplicate',
+            label: '重复测试变量',
+          },
+        }),
+        useCtx: () => ({ value: 'different-value' }),
+      });
+
+      const variables = app.getVariables();
+
+      expect(variables).toHaveLength(1);
+      const optionResult = variables[0].useOption();
+      expect(optionResult.option.label).toBe('测试变量');
+      expect(fn).toHaveBeenCalledWith('Variable test already registered');
+
+      console.warn = originalConsoleWarn;
+    });
+
+    it('should register multiple variables', () => {
+      const app = new Application({});
+
+      app.registerVariable({
+        name: 'var1',
+        useOption: () => ({
+          option: {
+            value: 'var1',
+            label: '变量1选项',
+          },
+        }),
+        useCtx: () => ({ value: 'var1-value' }),
+      });
+
+      app.registerVariable({
+        name: 'var2',
+        useOption: () => ({
+          option: {
+            value: 'var2',
+            label: '变量2选项',
+          },
+          visible: true,
+        }),
+        useCtx: () => ({ value: 'var2-value' }),
+      });
+
+      const variables = app.getVariables();
+
+      expect(variables).toHaveLength(2);
+      expect(variables[0].name).toBe('var1');
+      expect(variables[1].name).toBe('var2');
+
+      const optionResult1 = variables[0].useOption();
+      const optionResult2 = variables[1].useOption();
+
+      expect(optionResult1.visible).toBeUndefined();
+      expect(optionResult2.visible).toBe(true);
+    });
+
+    it('should support async useCtx function', () => {
+      const app = new Application({});
+
+      const asyncCtx = ({ variableName }) => Promise.resolve({ value: `${variableName}-async-value` });
+
+      app.registerVariable({
+        name: 'async-var',
+        useOption: () => ({
+          option: {
+            value: 'async-var',
+            label: '异步变量选项',
+          },
+        }),
+        useCtx: () => asyncCtx,
+      });
+
+      const variables = app.getVariables();
+
+      expect(variables).toHaveLength(1);
+      const ctxFn = variables[0].useCtx();
+
+      return ctxFn({ variableName: 'async-var' }).then((result) => {
+        expect(result).toEqual({ value: 'async-var-async-value' });
+      });
+    });
+
+    it('should support nested options in useOption', () => {
+      const app = new Application({});
+
+      app.registerVariable({
+        name: 'nested',
+        useOption: () => ({
+          option: {
+            value: 'parent',
+            label: '父选项',
+            children: [
+              {
+                value: 'child1',
+                label: '子选项1',
+              },
+              {
+                value: 'child2',
+                label: '子选项2',
+                disabled: true,
+              },
+            ],
+          },
+        }),
+        useCtx: () => ({ value: 'nested-value' }),
+      });
+
+      const variables = app.getVariables();
+
+      expect(variables).toHaveLength(1);
+
+      const optionResult = variables[0].useOption();
+      const options = optionResult.option;
+
+      expect(options.value).toBe('parent');
+      expect(options.children).toHaveLength(2);
+      expect(options.children[0].value).toBe('child1');
+      expect(options.children[1].disabled).toBe(true);
     });
   });
 });

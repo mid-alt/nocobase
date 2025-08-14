@@ -56,7 +56,9 @@ export default {
           dataSourceKey,
         },
       });
-
+      if (values.possibleTypes) {
+        delete values.possibleTypes;
+      }
       if (!fieldRecord) {
         fieldRecord = await mainDb.getRepository('dataSourcesFields').create({
           values: {
@@ -67,20 +69,22 @@ export default {
           },
         });
       } else {
-        await mainDb.getRepository('dataSourcesFields').update({
-          filter: {
-            name,
-            collectionName,
-            dataSourceKey,
-          },
-          values,
-        });
+        fieldRecord = (
+          await mainDb.getRepository('dataSourcesFields').update({
+            filter: {
+              name,
+              collectionName,
+              dataSourceKey,
+            },
+            values,
+          })
+        )[0];
       }
 
       const field = ctx.app.dataSourceManager.dataSources
         .get(dataSourceKey)
         .collectionManager.getCollection(collectionName)
-        .getField(name);
+        .getField(fieldRecord.get('name'));
 
       ctx.body = field.options;
 
@@ -107,7 +111,9 @@ export default {
           `Field name ${name} already exists in collection ${collectionName} of data source ${dataSourceKey}`,
         );
       }
-
+      if (values.possibleTypes) {
+        delete values.possibleTypes;
+      }
       const fieldRecord = await mainDb.getRepository('dataSourcesFields').create({
         values: {
           ...values,

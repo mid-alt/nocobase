@@ -15,7 +15,6 @@ import _ from 'lodash';
 import { useEffect, useMemo, useRef } from 'react';
 import { useAssociationNames } from '../../../../block-provider/hooks';
 import { useCollectionManager_deprecated, useCollection_deprecated } from '../../../../collection-manager';
-import { useCollectionRecordData } from '../../../../data-source/collection-record/CollectionRecordProvider';
 import { useFlag } from '../../../../flag-provider';
 import { useVariables } from '../../../../variables';
 import { transformVariableValue } from '../../../../variables/utils/transformVariableValue';
@@ -30,9 +29,8 @@ import { isDisplayField } from '../utils';
  */
 const useLazyLoadDisplayAssociationFieldsOfForm = () => {
   const { name } = useCollection_deprecated();
-  const { getCollectionJoinField } = useCollectionManager_deprecated();
+  const { getCollectionJoinField, getCollection } = useCollectionManager_deprecated();
   const form = useForm();
-  const recordData = useCollectionRecordData();
   const fieldSchema = useFieldSchema();
   const variables = useVariables();
   const field = useField<Field>();
@@ -43,7 +41,7 @@ const useLazyLoadDisplayAssociationFieldsOfForm = () => {
   const schemaName = fieldSchema.name.toString();
 
   // 是否已经预加载了数据（通过 appends 的形式）
-  const hasPreloadData = useMemo(() => hasPreload(recordData, schemaName), [recordData, schemaName]);
+  // const hasPreloadData = useMemo(() => hasPreload(recordData, schemaName), [recordData, schemaName]);
 
   const collectionFieldRef = useRef(null);
   const sourceCollectionFieldRef = useRef(null);
@@ -56,10 +54,8 @@ const useLazyLoadDisplayAssociationFieldsOfForm = () => {
   }
 
   const shouldNotLazyLoad = useMemo(() => {
-    return (
-      !isDisplayField(schemaName) || !variables || name === 'fields' || !collectionFieldRef.current || hasPreloadData
-    );
-  }, [schemaName, variables, name, collectionFieldRef.current, hasPreloadData]);
+    return !isDisplayField(schemaName) || !variables || name === 'fields' || !collectionFieldRef.current;
+  }, [schemaName, variables, name, collectionFieldRef.current]);
 
   const formValue = shouldNotLazyLoad
     ? {}
@@ -94,17 +90,21 @@ const useLazyLoadDisplayAssociationFieldsOfForm = () => {
     }
 
     const { appends } = getAssociationAppends();
-
+    const collection = getCollection(collectionFieldRef.current?.collectionName);
     variables
       .parseVariable(variableString, formVariable, { appends })
       .then(({ value }) => {
         nextTick(() => {
           const result = transformVariableValue(value, { targetCollectionField: collectionFieldRef.current });
-          // fix https://nocobase.height.app/T-2608
-          if (_.isEmpty(result) && !_.isNumber(result)) {
+          if (result == null) {
             field.value = null;
           } else {
             field.value = result;
+            field.componentProps = {
+              ...field.componentProps,
+              readOnlySubmit: true,
+              filterTargetKey: collection?.filterTargetKey || 'id',
+            }; // 让它不参与提交
           }
         });
       })

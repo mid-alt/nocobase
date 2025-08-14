@@ -12,6 +12,7 @@ import { oneEmptyTableWithUsers } from '../../details-multi/__e2e__/templatesOfB
 
 const deleteButton = async (page: Page, name: string) => {
   await page.getByRole('button', { name }).hover();
+  await page.getByRole('menuitem', { name: 'Delete' }).waitFor({ state: 'detached' });
   await page.getByRole('button', { name }).getByLabel('designer-schema-settings-').hover();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
@@ -32,10 +33,11 @@ test.describe('where list block can be added', () => {
     // 1. 打开弹窗，通过 Associated records 创建一个列表区块
     await page.getByLabel('action-Action.Link-View').click();
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'ordered-list List right' }).hover();
+    await page.getByRole('menuitem', { name: 'List right' }).hover();
     await page.getByRole('menuitem', { name: 'Associated records right' }).hover();
     await page.getByRole('menuitem', { name: 'Roles' }).click();
     await page.mouse.move(300, 0);
+    await page.waitForTimeout(300);
     await page.getByLabel('schema-initializer-Grid-').nth(1).hover();
     await page.getByRole('menuitem', { name: 'Role name' }).click();
     await page.mouse.move(300, 0);
@@ -45,7 +47,7 @@ test.describe('where list block can be added', () => {
 
     // 2. 通过 Other records 创建一个列表区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'ordered-list List right' }).hover();
+    await page.getByRole('menuitem', { name: 'List right' }).hover();
     await page.getByRole('menuitem', { name: 'Other records right' }).hover();
     await page.getByRole('menuitem', { name: 'Users' }).click();
     await page.mouse.move(300, 0);
@@ -70,6 +72,9 @@ test.describe('configure global actions', () => {
     await page.getByRole('menuitem', { name: 'Refresh' }).click();
 
     await page.mouse.move(300, 0);
+    await expect(page.getByRole('button', { name: 'Filter' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Add new' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Filter' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add new' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
@@ -122,6 +127,7 @@ test.describe('configure item actions', () => {
 
     await page.getByLabel('schema-initializer-ActionBar-list:configureItemActions-general').first().hover();
     await page.getByRole('menuitem', { name: 'Popup' }).click();
+    await page.mouse.move(300, 0);
     await page.getByLabel('schema-initializer-ActionBar-list:configureItemActions-general').first().hover();
     await page.getByRole('menuitem', { name: 'Update record' }).click();
 
@@ -179,9 +185,9 @@ test.describe('configure fields', () => {
       page.getByLabel('block-item-CollectionField-general-list-general.manyToOne.nickname').first(),
     ).not.toBeVisible();
 
-    // add text
+    // add markdown
     await formItemInitializer.hover();
-    await page.getByRole('menuitem', { name: 'Add text' }).click();
+    await page.getByRole('menuitem', { name: 'Add Markdown' }).click();
     await expect(page.getByLabel('block-item-Markdown.Void-general-list').first()).toBeVisible();
   });
 });

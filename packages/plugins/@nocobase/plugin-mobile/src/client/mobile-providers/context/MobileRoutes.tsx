@@ -7,13 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { APIClient, useAPIClient, useRequest } from '@nocobase/client';
+import { APIClient, LOADING_DELAY, useAPIClient, useRequest } from '@nocobase/client';
 import { Spin } from 'antd';
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, FC, useContext, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import type { IResource } from '@nocobase/sdk';
 
+import { useRouteTranslation } from '../../locale';
 import { useMobileTitle } from './MobileTitle';
 
 export interface MobileRouteItem {
@@ -25,6 +26,9 @@ export interface MobileRouteItem {
   icon?: string;
   parentId?: number;
   children?: MobileRouteItem[];
+  hideInMenu?: boolean;
+  enableTabs?: boolean;
+  hidden?: boolean;
 }
 
 export const MobileRoutesContext = createContext<MobileRoutesContextValue>(null);
@@ -79,16 +83,27 @@ function useActiveTabBar(routeList: MobileRouteItem[]) {
 
 function useTitle(activeTabBar: MobileRouteItem) {
   const context = useMobileTitle();
+  const { t } = useRouteTranslation();
   useEffect(() => {
     if (!context) return;
     if (activeTabBar) {
       context.setTitle(activeTabBar.title);
-      document.title = activeTabBar.title;
+      document.title = t(activeTabBar.title);
     }
   }, [activeTabBar, context]);
 }
 
-export const MobileRoutesProvider = ({ children }) => {
+export const MobileRoutesProvider: FC<{
+  /**
+   * list: return all route data, and only administrators can access;
+   * listAccessible: return the route data that the current user can access;
+   *
+   * @default 'listAccessible'
+   */
+  action?: 'list' | 'listAccessible';
+  refreshRef?: any;
+  manual?: boolean;
+}> = ({ children, refreshRef, manual, action = 'listAccessible' }) => {
   const api = useAPIClient();
   const resource = useMemo(() => api.resource('mobileRoutes'), [api]);
   const schemaResource = useMemo(() => api.resource('uiSchemas'), [api]);
@@ -96,9 +111,22 @@ export const MobileRoutesProvider = ({ children }) => {
     data,
     runAsync: refresh,
     loading,
-  } = useRequest<{ data: MobileRouteItem[] }>(() =>
-    resource.list({ tree: true, sort: 'sort' }).then((res) => res.data),
+  } = useRequest<{ data: MobileRouteItem[] }>(
+    () =>
+      resource[action](
+        action === 'listAccessible'
+          ? { tree: true, sort: 'sort', paginate: false }
+          : { tree: true, sort: 'sort', paginate: false, filter: { hidden: { $ne: true } } },
+      ).then((res) => res.data),
+    {
+      manual,
+    },
   );
+
+  if (refreshRef) {
+    refreshRef.current = refresh;
+  }
+
   const routeList = useMemo(() => data?.data || [], [data]);
   const { activeTabBarItem, activeTabItem } = useActiveTabBar(routeList);
 
@@ -112,7 +140,7 @@ export const MobileRoutesProvider = ({ children }) => {
   if (loading) {
     return (
       <div data-testid="mobile-loading" style={{ textAlign: 'center', margin: '20px 0' }}>
-        <Spin />
+        <Spin delay={LOADING_DELAY} />
       </div>
     );
   }

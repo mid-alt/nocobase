@@ -16,7 +16,7 @@ import { SchemaSettings } from '../../../../application/schema-settings/SchemaSe
 import { useFormBlockContext } from '../../../../block-provider/FormBlockProvider';
 import { useCollectionManager_deprecated, useCollection_deprecated } from '../../../../collection-manager';
 import { useFieldComponentName } from '../../../../common/useFieldComponentName';
-import { useCollectionField } from '../../../../data-source';
+import { useCollectionField, useDataBlockProps } from '../../../../data-source';
 import { useRecord } from '../../../../record-provider';
 import { removeNullCondition, useDesignable, useFieldModeOptions, useIsAddNewForm } from '../../../../schema-component';
 import { isSubMode } from '../../../../schema-component/antd/association-field/util';
@@ -34,6 +34,7 @@ import { SchemaSettingsSortingRule } from '../../../../schema-settings/SchemaSet
 import { useIsShowMultipleSwitch } from '../../../../schema-settings/hooks/useIsShowMultipleSwitch';
 import { useLocalVariables, useVariables } from '../../../../variables';
 import { useOpenModeContext } from '../../../popup/OpenModeProvider';
+import { ellipsisSettingsItem, enableLinkSettingsItem, openModeSettingsItem } from '../Input/inputComponentSettings';
 
 const enableLink = {
   name: 'enableLink',
@@ -66,13 +67,12 @@ const enableLink = {
             },
           },
         });
-        dn.refresh();
       },
     };
   },
 };
 
-const titleField: any = {
+export const titleField: any = {
   name: 'titleField',
   type: 'select',
   useComponentProps() {
@@ -126,6 +126,10 @@ export const getAllowMultiple = (params?: { title: string }) => {
   return {
     name: 'allowMultiple',
     type: 'switch',
+    useVisible() {
+      const isAssociationField = useIsAssociationField();
+      return isAssociationField;
+    },
     useComponentProps() {
       const { t } = useTranslation();
       const field = useField<Field>();
@@ -191,6 +195,9 @@ const quickCreate: any = {
               title: "{{t('Add new')}}",
               // 'x-designer': 'Action.Designer',
               'x-toolbar': 'ActionSchemaToolbar',
+              'x-toolbar-props': {
+                draggable: false,
+              },
               'x-settings': 'actionSettings:addNew',
               'x-component': 'Action',
               'x-decorator': 'ACLActionProvider',
@@ -225,7 +232,7 @@ const setDefaultSortingRules = {
   Component: SchemaSettingsSortingRule,
 };
 
-const setTheDataScope: any = {
+export const setTheDataScope: any = {
   name: 'setTheDataScope',
   Component: SchemaSettingsDataScope,
   useComponentProps() {
@@ -357,7 +364,8 @@ export const selectComponentFieldSettings = new SchemaSettings({
         const isAssociationField = useIsAssociationField();
         const readPretty = useIsFieldReadPretty();
         const { fieldSchema } = useColumnSchema();
-        return isAssociationField && !fieldSchema && !readPretty;
+        const { type } = useDataBlockProps() || ({} as any);
+        return isAssociationField && !fieldSchema && !readPretty && type !== 'publicForm';
       },
     },
     {
@@ -378,6 +386,30 @@ export const selectComponentFieldSettings = new SchemaSettings({
       useVisible() {
         const readPretty = useIsFieldReadPretty();
         return useIsAssociationField() && readPretty;
+      },
+    },
+    ellipsisSettingsItem,
+    {
+      ...enableLinkSettingsItem,
+      useVisible() {
+        const collectionField = useCollectionField();
+        const readPretty = useIsFieldReadPretty();
+        return !useIsAssociationField() && readPretty && collectionField.interface !== 'multipleSelect';
+      },
+    },
+    {
+      ...openModeSettingsItem,
+      useVisible() {
+        const field = useField();
+        const isAssociationField = useIsAssociationField();
+        const { fieldSchema: columnSchema } = useColumnSchema();
+        const schema = useFieldSchema();
+        const fieldSchema = columnSchema || schema;
+        return (
+          (fieldSchema?.['x-read-pretty'] || field.readPretty) &&
+          (fieldSchema?.['x-component-props']?.enableLink ||
+            (isAssociationField && fieldSchema?.['x-component-props']?.enableLink !== false))
+        );
       },
     },
   ],

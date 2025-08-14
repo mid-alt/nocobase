@@ -7,15 +7,17 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { PlusOutlined, ZoomInOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { ArrayField } from '@formily/core';
 import { exchangeArrayState } from '@formily/core/esm/shared/internals';
-import { observer, RecursionField, useFieldSchema } from '@formily/react';
+import { observer, useFieldSchema } from '@formily/react';
 import { action } from '@formily/reactive';
 import { isArr } from '@formily/shared';
-import { Button } from 'antd';
-import React, { useContext, useMemo, useState } from 'react';
+import { Space } from 'antd';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
 import {
   FormProvider,
   RecordPickerContext,
@@ -30,11 +32,13 @@ import { CollectionProvider_deprecated } from '../../../collection-manager';
 import { CollectionRecordProvider, useCollection, useCollectionRecord } from '../../../data-source';
 import { markRecordAsNew } from '../../../data-source/collection-record/isNewRecord';
 import { FlagProvider } from '../../../flag-provider';
+import { NocoBaseRecursionField } from '../../../formily/NocoBaseRecursionField';
 import { useCompile } from '../../hooks';
-import { ActionContextProvider } from '../action';
-import { Table } from '../table-v2/Table';
+import { Action, ActionContextProvider } from '../action';
+import { useSubTableSpecialCase } from '../form-item/hooks/useSpecialCase';
 import { SubFormProvider, useAssociationFieldContext, useFieldNames } from './hooks';
 import { useTableSelectorProps } from './InternalPicker';
+import { Table } from './Table';
 import { getLabelFormatValue, useLabelUiSchema } from './util';
 
 const subTableContainer = css`
@@ -60,10 +64,27 @@ const subTableContainer = css`
     transform: translateY(0);
     opacity: 1;
   }
+  .ant-table-cell .ant-formily-item-control {
+    max-width: 100% !important;
+  }
+  .ant-table-thead .ant-table-cell {
+    font-weight: normal;
+  }
+  .ant-pagination {
+    position: absolute;
+    right: 0px;
+    bottom: 0px;
+    max-height: 23px;
+  }
+  .ant-table-footer {
+    margin-top: 10px;
+    background: inherit;
+    min-height: 22px;
+  }
 `;
 
 const tableClassName = css`
-  .ant-formily-item.ant-formily-item-feedback-layout-loose {
+  .ant-formily-item-feedback-layout-popover {
     margin-bottom: 0px !important;
   }
   .ant-formily-editable {
@@ -74,21 +95,10 @@ const tableClassName = css`
   }
 `;
 
-const addNewButtonClassName = css`
-  display: block;
-  border-radius: 0px;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
-`;
-
-const selectButtonClassName = css`
-  display: block;
-  border-radius: 0px;
-`;
-
 export const SubTable: any = observer(
   (props: any) => {
     const { openSize } = props;
-    const { field, options: collectionField } = useAssociationFieldContext<ArrayField>();
+    const { field, options: collectionField, fieldSchema: schema } = useAssociationFieldContext<ArrayField>();
     const { t } = useTranslation();
     const [visibleSelector, setVisibleSelector] = useState(false);
     const [selectedRows, setSelectedRows] = useState([]);
@@ -98,6 +108,10 @@ export const SubTable: any = observer(
     const labelUiSchema = useLabelUiSchema(collectionField, fieldNames?.label || 'label');
     const recordV2 = useCollectionRecord();
     const collection = useCollection();
+    const { allowSelectExistingRecord, allowAddnew, allowDisassociation, enableIndexColumn } = field.componentProps;
+
+    useSubTableSpecialCase({ rootField: field, rootSchema: schema });
+
     const move = (fromIndex: number, toIndex: number) => {
       if (toIndex === undefined) return;
       if (!isArr(field.value)) return;
@@ -144,24 +158,78 @@ export const SubTable: any = observer(
       setSelectedRows,
       collectionField,
     };
+
     const usePickActionProps = () => {
       const { setVisible } = useActionContext();
       const { selectedRows, setSelectedRows } = useContext(RecordPickerContext);
       return {
         onClick() {
-          selectedRows.map((v) => field.value.push(v));
+          if (!Array.isArray(field.value)) {
+            field.value = [];
+          }
+
+          selectedRows.forEach((v) => field.value.push(markRecordAsNew(v)));
           field.onInput(field.value);
           field.initialValue = field.value;
           setSelectedRows([]);
           setVisible(false);
+          const totalPages = Math.ceil(field.value.length / (field.componentProps?.pageSize || 10));
+          setCurrentPage(totalPages);
         },
       };
     };
     const getFilter = () => {
       const targetKey = collectionField?.targetKey || 'id';
-      const list = (field.value || []).map((option) => option[targetKey]).filter(Boolean);
+      const list = (field.value || []).map((option) => option?.[targetKey]).filter(Boolean);
       const filter = list.length ? { $and: [{ [`${targetKey}.$ne`]: list }] } : {};
       return filter;
+    };
+    //分页
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(field.componentProps?.pageSize || 10); // 每页条数
+    const { setFormValueChanged } = useActionContext();
+    useEffect(() => {
+      setPageSize(field.componentProps?.pageSize);
+    }, [field.componentProps?.pageSize]);
+
+    const paginationConfig = useMemo(() => {
+      const page = Math.ceil(field.value?.length / 10);
+      return {
+        current: currentPage > page ? page : currentPage,
+        pageSize: pageSize || 10,
+        total: field?.value,
+        onChange: (page, pageSize) => {
+          setCurrentPage(page);
+          setPageSize(pageSize);
+          field.componentProps.pageSize = pageSize;
+          field.onInput(field.value);
+          setFormValueChanged?.(false);
+        },
+        showSizeChanger: true,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        hideOnSinglePage: false,
+      };
+    }, [field.value?.length, pageSize, currentPage]);
+
+    const useSubTableAddNewProps = () => {
+      const { field } = useAssociationFieldContext<ArrayField>();
+      return {
+        run() {
+          field.value = field.value || [];
+          field.value.push(markRecordAsNew({}));
+          // 计算总页数，并跳转到最后一页
+          const totalPages = Math.ceil(field.value.length / (field.componentProps?.pageSize || 10));
+          setCurrentPage(totalPages);
+          return field.onInput(field.value);
+        },
+      };
+    };
+    const useSubTableSelectProps = () => {
+      return {
+        run() {
+          setVisibleSelector(true);
+        },
+      };
     };
     return (
       <div className={subTableContainer}>
@@ -172,46 +240,63 @@ export const SubTable: any = observer(
               <SubFormProvider value={{ value: null, collection, fieldSchema: fieldSchema.parent, skip: true }}>
                 <Table
                   className={tableClassName}
-                  bordered
                   size={'small'}
                   field={field}
                   showIndex
                   dragSort={false}
-                  showDel={field.editable}
-                  pagination={false}
-                  rowSelection={{ type: 'none', hideSelectAll: true }}
-                  footer={() =>
-                    field.editable && (
-                      <>
-                        {field.componentProps?.allowAddnew !== false && (
-                          <Button
-                            type={'text'}
-                            block
-                            className={addNewButtonClassName}
-                            onClick={() => {
-                              field.value = field.value || [];
-                              field.value.push(markRecordAsNew({}));
-                            }}
-                          >
-                            {t('Add new')}
-                          </Button>
-                        )}
-                        {field.componentProps?.allowSelectExistingRecord && (
-                          <Button
-                            type={'text'}
-                            block
-                            className={selectButtonClassName}
-                            onClick={() => {
-                              setVisibleSelector(true);
-                            }}
-                          >
-                            {t('Select')}
-                          </Button>
-                        )}
-                      </>
-                    )
+                  showDel={
+                    field.editable &&
+                    (allowAddnew !== false || allowSelectExistingRecord !== false || allowDisassociation !== false)
+                      ? (record) => {
+                          if (!field.editable) {
+                            return false;
+                          }
+                          if (allowDisassociation !== false) {
+                            return true;
+                          }
+                          return record?.__isNewRecord__;
+                        }
+                      : false
                   }
+                  pagination={paginationConfig}
+                  rowSelection={{ type: 'none', hideSelectAll: true }}
                   isSubTable={true}
+                  locale={{
+                    emptyText: <span> {field.editable ? t('Please add or select record') : t('No data')}</span>,
+                  }}
+                  enableIndexColumn={enableIndexColumn !== false}
+                  footer={() => (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {field.editable && (
+                        <Space
+                          style={{
+                            gap: 15,
+                          }}
+                        >
+                          {allowAddnew !== false && (
+                            <Action.Link
+                              useAction={useSubTableAddNewProps}
+                              title={
+                                <Space style={{ gap: 2 }} className="nb-sub-table-addNew">
+                                  <PlusOutlined /> {t('Add new')}
+                                </Space>
+                              }
+                            />
+                          )}
+                          {allowSelectExistingRecord && (
+                            <Action.Link
+                              useAction={useSubTableSelectProps}
+                              title={
+                                <Space style={{ gap: 2 }}>
+                                  <ZoomInOutlined /> {t('Select record')}
+                                </Space>
+                              }
+                            />
+                          )}
+                        </Space>
+                      )}
+                    </div>
+                  )}
                 />
               </SubFormProvider>
             </FormActiveFieldsProvider>
@@ -236,7 +321,7 @@ export const SubTable: any = observer(
                       useCreateActionProps,
                     }}
                   >
-                    <RecursionField
+                    <NocoBaseRecursionField
                       onlyRenderProperties
                       basePath={field.address}
                       schema={fieldSchema.parent}

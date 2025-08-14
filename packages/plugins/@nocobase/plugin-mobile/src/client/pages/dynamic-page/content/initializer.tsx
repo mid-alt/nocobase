@@ -15,13 +15,10 @@ export const mobileAddBlockInitializer = new SchemaInitializer({
   name: 'mobile:addBlock',
   icon: 'PlusOutlined',
   wrap: gridRowColWrap,
-  style: {
-    margin: 20,
-  },
   items: [
     {
       name: 'dataBlocks',
-      title: '{{t("Desktop data blocks")}}',
+      title: '{{t("Data blocks")}}',
       type: 'itemGroup',
       children: [
         {
@@ -52,9 +49,21 @@ export const mobileAddBlockInitializer = new SchemaInitializer({
       ],
     },
     {
+      name: 'filterBlocks',
+      title: '{{t("Filter blocks")}}',
+      type: 'itemGroup',
+      children: [
+        {
+          name: 'filterForm',
+          title: '{{t("Form")}}',
+          Component: 'FilterFormBlockInitializer',
+        },
+      ],
+    },
+    {
       name: 'otherBlocks',
       type: 'itemGroup',
-      title: '{{t("Other desktop blocks")}}',
+      title: '{{t("Other blocks")}}',
       children: [
         {
           name: 'markdown',

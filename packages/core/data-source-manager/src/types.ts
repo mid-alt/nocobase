@@ -7,10 +7,12 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { DataSource } from './data-source';
+
 export type CollectionOptions = {
   name: string;
   repository?: string;
-  filterTargetKey?: string;
+  filterTargetKey?: string | Array<string>;
   fields: any[];
   [key: string]: any;
 };
@@ -65,6 +67,8 @@ export interface ICollection {
 
   getField(name: string): IField;
 
+  getFieldByField(field: string): IField;
+
   [key: string]: any;
 
   unavailableActions?: () => string[];
@@ -100,6 +104,10 @@ export type MergeOptions = {
 };
 
 export interface ICollectionManager {
+  dataSource: DataSource;
+
+  setDataSource(dataSource: DataSource): void;
+
   registerFieldTypes(types: Record<string, any>): void;
 
   registerFieldInterfaces(interfaces: Record<string, new (options: any) => IFieldInterface>): void;

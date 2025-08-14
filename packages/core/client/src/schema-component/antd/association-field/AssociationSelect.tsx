@@ -9,18 +9,42 @@
 
 import { LoadingOutlined, PlusOutlined } from '@ant-design/icons';
 import { onFieldInputValueChange } from '@formily/core';
-import { RecursionField, connect, mapProps, observer, useField, useFieldSchema, useForm } from '@formily/react';
+import { connect, mapProps, observer, useField, useFieldSchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
 import { Space, message } from 'antd';
+import { isEqual } from 'lodash';
 import { isFunction } from 'mathjs';
-import { last } from 'lodash';
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ClearCollectionFieldContext, RecordProvider, useAPIClient, useCollectionRecordData } from '../../../';
+import {
+  ClearCollectionFieldContext,
+  NocoBaseRecursionField,
+  RecordProvider,
+  SchemaComponentContext,
+  useAPIClient,
+  useCollectionManager_deprecated,
+  useCollectionRecordData,
+} from '../../../';
+import { VariablePopupRecordProvider } from '../../../modules/variable/variablesProvider/VariablePopupRecordProvider';
 import { isVariable } from '../../../variables/utils/isVariable';
 import { getInnermostKeyAndValue } from '../../common/utils/uitls';
+import { Action } from '../action';
 import { RemoteSelect, RemoteSelectProps } from '../remote-select';
 import useServiceOptions, { useAssociationFieldContext } from './hooks';
+
+const removeIfKeyEmpty = (obj, filterTargetKey) => {
+  if (!obj || typeof obj !== 'object' || !filterTargetKey || Array.isArray(obj)) return obj;
+  return !obj[filterTargetKey] ? undefined : obj;
+};
+
+export const AssociationFieldAddNewer = (props) => {
+  const schemaComponentCtxValue = useContext(SchemaComponentContext);
+  return (
+    <SchemaComponentContext.Provider value={{ ...schemaComponentCtxValue, draggable: true }}>
+      <Action.Container {...props} />
+    </SchemaComponentContext.Provider>
+  );
+};
 
 export type AssociationSelectProps<P = any> = RemoteSelectProps<P> & {
   addMode?: 'quickAdd' | 'modalAdd';
@@ -51,6 +75,11 @@ export const filterAnalyses = (filters): any[] => {
   return results;
 };
 
+function getFieldPath(str) {
+  const lastIndex = str.lastIndexOf('.');
+  return lastIndex === -1 ? str : str.slice(0, lastIndex);
+}
+
 const InternalAssociationSelect = observer(
   (props: AssociationSelectProps) => {
     const { objectValue = true, addMode: propsAddMode, ...rest } = props;
@@ -69,25 +98,38 @@ const InternalAssociationSelect = observer(
     const api = useAPIClient();
     const resource = api.resource(collectionField.target);
     const recordData = useCollectionRecordData();
+    const schemaComponentCtxValue = useContext(SchemaComponentContext);
+    const { getCollection } = useCollectionManager_deprecated();
+    const associationCollection = getCollection(collectionField.target);
+    const { filterTargetKey } = associationCollection;
+
     useEffect(() => {
       const initValue = isVariable(field.value) ? undefined : field.value;
       const value = Array.isArray(initValue) ? initValue.filter(Boolean) : initValue;
-      setInnerValue(value);
-    }, [field.value]);
+      const result = removeIfKeyEmpty(value, filterTargetKey);
+      setInnerValue(result);
+      if (!isEqual(field.value, result)) {
+        field.value = result;
+      }
+    }, [field.value, filterTargetKey]);
+
     useEffect(() => {
       const id = uid();
       form.addEffects(id, () => {
         //支持深层次子表单
         onFieldInputValueChange('*', (fieldPath: any) => {
           const linkageFields = filterAnalyses(field.componentProps?.service?.params?.filter) || [];
+          const linageFieldEntire = getFieldPath(fieldPath.address.entire);
+          const targetFieldEntire = getFieldPath(field.address.entire);
           if (
             linkageFields.includes(fieldPath?.props?.name) &&
             field.value &&
-            last(fieldPath?.indexes) === last(field?.indexes) &&
-            fieldPath?.props?.name !== field.props.name
+            isEqual(fieldPath?.indexes, field?.indexes) &&
+            fieldPath?.props?.name !== field.props.name &&
+            (!field?.indexes?.length || isEqual(linageFieldEntire, targetFieldEntire))
           ) {
-            field.setValue(undefined);
-            setInnerValue(undefined);
+            field.setValue(null);
+            setInnerValue(null);
           }
         });
       });
@@ -139,29 +181,33 @@ const InternalAssociationSelect = observer(
             {...rest}
             size={'middle'}
             objectValue={objectValue}
-            value={value || innerValue}
+            value={removeIfKeyEmpty(value || innerValue, filterTargetKey)}
             service={service}
             onChange={(value) => {
-              const val = value?.length !== 0 ? value : null;
+              const val = Array.isArray(value) && value.length === 0 ? null : value;
               props.onChange?.(val);
             }}
             CustomDropdownRender={addMode === 'quickAdd' && QuickAddContent}
           ></RemoteSelect>
 
           {addMode === 'modalAdd' && (
-            <RecordProvider isNew={true} record={null} parent={recordData}>
-              {/* 快捷添加按钮添加的添加的是一个普通的 form 区块（非关系区块），不应该与任何字段有关联，所以在这里把字段相关的上下文给清除掉 */}
-              <ClearCollectionFieldContext>
-                <RecursionField
-                  onlyRenderProperties
-                  basePath={field.address}
-                  schema={fieldSchema}
-                  filterProperties={(s) => {
-                    return s['x-component'] === 'Action';
-                  }}
-                />
-              </ClearCollectionFieldContext>
-            </RecordProvider>
+            <SchemaComponentContext.Provider value={{ ...schemaComponentCtxValue, draggable: false }}>
+              <RecordProvider isNew={true} record={null} parent={recordData}>
+                <VariablePopupRecordProvider>
+                  {/* 快捷添加按钮添加的添加的是一个普通的 form 区块（非关系区块），不应该与任何字段有关联，所以在这里把字段相关的上下文给清除掉 */}
+                  <ClearCollectionFieldContext>
+                    <NocoBaseRecursionField
+                      onlyRenderProperties
+                      basePath={field.address}
+                      schema={fieldSchema}
+                      filterProperties={(s) => {
+                        return s['x-component'] === 'Action';
+                      }}
+                    />
+                  </ClearCollectionFieldContext>
+                </VariablePopupRecordProvider>
+              </RecordProvider>
+            </SchemaComponentContext.Provider>
           )}
         </Space.Compact>
       </div>

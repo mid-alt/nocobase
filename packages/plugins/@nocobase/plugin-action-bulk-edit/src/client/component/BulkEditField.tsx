@@ -17,7 +17,6 @@ import {
   useCollection_deprecated,
   useCompile,
   useComponent,
-  useFormBlockContext,
 } from '@nocobase/client';
 import { Checkbox, Select, Space } from 'antd';
 import React, { useEffect, useState } from 'react';
@@ -36,14 +35,6 @@ const InternalField: React.FC = (props) => {
   const setFieldProps = (key, value) => {
     field[key] = typeof field[key] === 'undefined' ? value : field[key];
   };
-  const ctx = useFormBlockContext();
-
-  useEffect(() => {
-    if (ctx?.field) {
-      ctx.field.added = ctx.field.added || new Set();
-      ctx.field.added.add(fieldSchema.name);
-    }
-  });
 
   useEffect(() => {
     if (!uiSchema) {
@@ -63,7 +54,6 @@ const InternalField: React.FC = (props) => {
     }
     field.required = true;
     // @ts-ignore
-    field.dataSource = uiSchema.enum;
     const originalProps = compile(uiSchema['x-component-props']) || {};
     const componentProps = merge(originalProps, field.componentProps || {});
     field.componentProps = componentProps;
@@ -99,7 +89,7 @@ export const BulkEditField = (props: any) => {
   const [value, setValue] = useState(null);
   const { getField } = useCollection_deprecated();
   const collectionField = getField(fieldSchema.name) || {};
-
+  const { uiSchema } = collectionField;
   useEffect(() => {
     field.value = toFormFieldValue({ [type]: value });
     if (field.required) {
@@ -111,6 +101,18 @@ export const BulkEditField = (props: any) => {
       }
     }
   }, [field, type, value]);
+
+  useEffect(() => {
+    field.dataSource = field.dataSource || uiSchema.enum;
+    field.data = field.data || {};
+    field.data.dataSource = uiSchema.enum;
+  }, [uiSchema]);
+
+  useEffect(() => {
+    if (field.value === null) {
+      setValue(undefined);
+    }
+  }, [field.value]);
 
   const typeChangeHandler = (val) => {
     setType(val);

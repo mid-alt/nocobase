@@ -8,21 +8,20 @@
  */
 
 import { ArrayField } from '@formily/core';
-import { Schema, useField, useFieldSchema } from '@formily/react';
-import { Spin } from 'antd';
-import uniq from 'lodash/uniq';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useField, useFieldSchema } from '@formily/react';
 import {
-  useACLRoleContext,
-  useCollection_deprecated,
-  useCollectionManager_deprecated,
-  FixedBlockWrapper,
   BlockProvider,
+  useACLRoleContext,
+  useAPIClient,
   useBlockRequestContext,
   useCollection,
+  useCollection_deprecated,
+  useParsedFilter,
+  useApp,
 } from '@nocobase/client';
+import { Spin } from 'antd';
 import { isEqual } from 'lodash';
-import { toColumns } from './Kanban';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 export const KanbanBlockContext = createContext<any>({});
 KanbanBlockContext.displayName = 'KanbanBlockContext';
@@ -50,94 +49,48 @@ const InternalKanbanBlockProvider = (props) => {
   }
   field.loaded = true;
   return (
-    <FixedBlockWrapper>
-      <KanbanBlockContext.Provider
-        value={{
-          props: {
-            resource: props.resource,
-          },
-          field,
-          service,
-          resource,
-          groupField,
-          // fixedBlock: field?.decoratorProps?.fixedBlock,
-          sortField: props?.sortField,
-        }}
-      >
-        {props.children}
-      </KanbanBlockContext.Provider>
-    </FixedBlockWrapper>
+    <KanbanBlockContext.Provider
+      value={{
+        props: {
+          resource: props.resource,
+        },
+        field,
+        service,
+        resource,
+        groupField,
+        // fixedBlock: field?.decoratorProps?.fixedBlock,
+        sortField: props?.sortField,
+      }}
+    >
+      {props.children}
+    </KanbanBlockContext.Provider>
   );
 };
 
-const recursiveProperties = (schema: Schema, component = 'CollectionField', associationFields, appends: any = []) => {
-  schema.mapProperties((s: any) => {
-    const name = s.name.toString();
-    if (s['x-component'] === component && !appends.includes(name)) {
-      // 关联字段和关联的关联字段
-      const [firstName] = name.split('.');
-      if (associationFields.has(name)) {
-        appends.push(name);
-      } else if (associationFields.has(firstName) && !appends.includes(firstName)) {
-        appends.push(firstName);
-      }
-    } else {
-      recursiveProperties(s, component, associationFields, appends);
-    }
-  });
-};
-
-const useAssociationNames = (collection) => {
-  const { getCollectionFields } = useCollectionManager_deprecated(collection.dataSource);
-  const collectionFields = getCollectionFields(collection);
-  const associationFields = new Set();
-  for (const collectionField of collectionFields) {
-    if (collectionField.target) {
-      associationFields.add(collectionField.name);
-      const fields = getCollectionFields(collectionField.target);
-      for (const field of fields) {
-        if (field.target) {
-          associationFields.add(`${collectionField.name}.${field.name}`);
-        }
-      }
-    }
-  }
-  const fieldSchema = useFieldSchema();
-  const kanbanSchema = fieldSchema.reduceProperties((buf, schema) => {
-    if (schema['x-component'].startsWith('Kanban')) {
-      return schema;
-    }
-    return buf;
-  }, new Schema({}));
-  const gridSchema: any = kanbanSchema?.properties?.card?.properties?.grid;
-  const appends = [];
-  if (gridSchema) {
-    recursiveProperties(gridSchema, 'CollectionField', associationFields, appends);
-  }
-
-  return uniq(appends);
-};
-
 export const KanbanBlockProvider = (props) => {
-  const params = { ...props.params };
-  const appends = useAssociationNames(props.association || props.collection);
-  if (!Object.keys(params).includes('appends')) {
-    params['appends'] = appends;
-  }
+  const { filter: parsedFilter } = useParsedFilter({
+    filterOption: props.params?.filter,
+  });
+  const params = { ...props.params, filter: parsedFilter };
+
   return (
     <BlockProvider name="kanban" {...props} params={params}>
       <InternalKanbanBlockProvider {...props} params={params} />
     </BlockProvider>
   );
 };
-
 export const useKanbanBlockContext = () => {
   return useContext(KanbanBlockContext);
 };
 
 const useDisableCardDrag = () => {
+  const fieldSchema = useFieldSchema();
+  const { dragSort } = fieldSchema?.parent?.['x-component-props'] || {};
   const ctx = useKanbanBlockContext();
   const { allowAll, allowConfigure, parseAction } = useACLRoleContext();
+  if (dragSort === false) {
+    return true;
+  }
   if (allowAll || allowConfigure) {
     return false;
   }
@@ -145,20 +98,56 @@ const useDisableCardDrag = () => {
   return !result;
 };
 
+export const toColumns = (groupCollectionField: any, dataSource: Array<any> = [], primaryKey, options) => {
+  const columns = {
+    __unknown__: {
+      id: '__unknown__',
+      title: 'Unknown',
+      color: 'default',
+      cards: [],
+    },
+  };
+  options?.forEach((item) => {
+    columns[item.value] = {
+      id: item.value,
+      title: item.label,
+      color: item.color,
+      cards: [],
+    };
+  });
+  dataSource.forEach((ds) => {
+    const value = ds[groupCollectionField.name];
+    if (value && columns[value]) {
+      columns[value].cards.push({ ...ds, id: ds[primaryKey] });
+    } else {
+      columns.__unknown__.cards.push(ds);
+    }
+  });
+  if (columns.__unknown__.cards.length === 0) {
+    delete columns.__unknown__;
+  }
+  return Object.values(columns);
+};
+
 export const useKanbanBlockProps = () => {
   const field = useField<ArrayField>();
   const ctx = useKanbanBlockContext();
   const [dataSource, setDataSource] = useState([]);
   const primaryKey = useCollection()?.getPrimaryKey();
-
+  const fieldSchema = useFieldSchema();
+  const app = useApp();
+  const plugin = app.pm.get('kanban') as any;
+  const targetGroupField = plugin.getGroupFieldInterface(ctx.groupField.interface);
+  const { options } = targetGroupField?.useGetGroupOptions(ctx.groupField) || { options: [] };
+  const { columnWidth } = fieldSchema?.parent?.['x-component-props'] || {};
   useEffect(() => {
-    const data = toColumns(ctx.groupField, ctx?.service?.data?.data, primaryKey);
+    const data = toColumns(ctx.groupField, ctx?.service?.data?.data, primaryKey, options);
     if (isEqual(field.value, data) && dataSource === field.value) {
       return;
     }
     field.value = data;
     setDataSource(field.value);
-  }, [ctx?.service?.loading]);
+  }, [ctx?.service?.loading, options]);
 
   const disableCardDrag = useDisableCardDrag();
 
@@ -190,5 +179,6 @@ export const useKanbanBlockProps = () => {
     groupField: ctx.groupField,
     disableCardDrag,
     onCardDragEnd,
+    columnWidth,
   };
 };

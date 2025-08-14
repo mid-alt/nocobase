@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Collection, Database, mockDatabase } from '@nocobase/database';
+import { Collection, Database, createMockDatabase } from '@nocobase/database';
 
 describe('update', () => {
   let db: Database;
@@ -20,7 +20,7 @@ describe('update', () => {
   });
 
   beforeEach(async () => {
-    db = mockDatabase();
+    db = await createMockDatabase();
 
     await db.clean({ drop: true });
     PostTag = db.collection({
@@ -85,6 +85,40 @@ describe('update', () => {
     });
 
     await db.sync();
+  });
+
+  it('should update collection that without primary key', async () => {
+    const collection = db.collection({
+      name: 'without_pk',
+      autoGenId: false,
+      timestamps: false,
+      fields: [{ type: 'string', name: 'nameWithUnderscore' }],
+    });
+
+    await collection.sync();
+
+    await collection.repository.create({
+      values: {
+        nameWithUnderscore: 'item1',
+      },
+    });
+
+    await collection.repository.update({
+      values: {
+        nameWithUnderscore: 'item2',
+      },
+      filter: {
+        nameWithUnderscore: 'item1',
+      },
+    });
+
+    const item = await collection.repository.findOne({
+      filter: {
+        nameWithUnderscore: 'item2',
+      },
+    });
+
+    expect(item).toBeDefined();
   });
 
   it('should throw error when update data conflicted', async () => {

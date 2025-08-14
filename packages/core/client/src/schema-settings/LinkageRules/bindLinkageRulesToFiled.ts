@@ -37,36 +37,43 @@ interface Props {
    * @default '$nForm'
    */
   variableNameOfLeftCondition?: string;
+  action?: any;
+  conditionType?: 'advanced' | 'basic';
 }
 
-export function bindLinkageRulesToFiled({
-  field,
-  linkageRules,
-  formValues,
-  localVariables,
-  action,
-  rule,
-  variables,
-  variableNameOfLeftCondition,
-}: {
-  field: any;
-  linkageRules: any[];
-  formValues: any;
-  localVariables: VariableOption[];
-  action: any;
-  rule: any;
-  variables: VariablesContextType;
-  /**
-   * used to parse the variable name of the left condition value
-   * @default '$nForm'
-   */
-  variableNameOfLeftCondition?: string;
-}) {
+export function bindLinkageRulesToFiled(
+  {
+    field,
+    linkageRules,
+    formValues,
+    localVariables,
+    action,
+    rule,
+    variables,
+    variableNameOfLeftCondition,
+  }: {
+    field: any;
+    linkageRules: any[];
+    formValues: any;
+    localVariables: VariableOption[];
+    action: any;
+    rule: any;
+    variables: VariablesContextType;
+    /**
+     * used to parse the variable name of the left condition value
+     * @default '$nForm'
+     */
+    variableNameOfLeftCondition?: string;
+  },
+  jsonLogic: any,
+) {
   field['initStateOfLinkageRules'] = {
     display: field.initStateOfLinkageRules?.display || getTempFieldState(true, field.display),
     required: field.initStateOfLinkageRules?.required || getTempFieldState(true, field.required || false),
     pattern: field.initStateOfLinkageRules?.pattern || getTempFieldState(true, field.pattern),
     value: field.initStateOfLinkageRules?.value || getTempFieldState(true, field.value || field.initialValue),
+    dataSource: field.initStateOfLinkageRules?.dataSource || getTempFieldState(true, field.dataSource || field.options),
+    dateScope: field.initStateOfLinkageRules?.dateScope || getTempFieldState(true, null),
   };
 
   return reaction(
@@ -77,7 +84,6 @@ export function bindLinkageRulesToFiled({
     () => {
       // 获取条件中的字段值
       const fieldValuesInCondition = getFieldValuesInCondition({ linkageRules, formValues });
-
       // 获取条件中的变量值
       const variableValuesInCondition = getVariableValuesInCondition({ linkageRules, localVariables });
 
@@ -89,7 +95,7 @@ export function bindLinkageRulesToFiled({
         .join(',');
       return result;
     },
-    getSubscriber({ action, field, rule, variables, localVariables, variableNameOfLeftCondition }),
+    getSubscriber({ action, field, rule, variables, localVariables, variableNameOfLeftCondition }, jsonLogic),
     { fireImmediately: true, equals: _.isEqual },
   );
 }
@@ -102,7 +108,6 @@ function getFieldValuesInCondition({ linkageRules, formValues }) {
 
       return conditions
         .map((condition) => {
-          // fix https://nocobase.height.app/T-3251
           if ('$and' in condition || '$or' in condition) {
             return run(condition);
           }
@@ -117,7 +122,7 @@ function getFieldValuesInCondition({ linkageRules, formValues }) {
   });
 }
 
-function getVariableValuesInCondition({
+export function getVariableValuesInCondition({
   linkageRules,
   localVariables,
 }: {
@@ -127,24 +132,46 @@ function getVariableValuesInCondition({
   return linkageRules.map((rule) => {
     const type = Object.keys(rule.condition)[0] || '$and';
     const conditions = rule.condition[type];
+    if (rule.conditionType === 'advanced') {
+      return conditions
+        .map((condition) => {
+          if (!condition) {
+            return null;
+          }
+          // 支持嵌套的条件
+          if (condition.$and || condition.$or) {
+            return getVariableValuesInCondition({
+              linkageRules: [{ conditionType: 'advanced', condition }],
+              localVariables,
+            });
+          }
+          const resolveVariable = (varName) =>
+            isVariable(varName) ? getVariableValue(varName, localVariables) : varName;
+          return {
+            leftVar: resolveVariable(condition.leftVar),
+            rightVar: resolveVariable(condition.rightVar),
+          };
+        })
+        .filter(Boolean);
+    } else {
+      return conditions
+        .map((condition) => {
+          const jsonlogic = getInnermostKeyAndValue(condition);
+          if (!jsonlogic) {
+            return null;
+          }
+          if (isVariable(jsonlogic.value)) {
+            return getVariableValue(jsonlogic.value, localVariables);
+          }
 
-    return conditions
-      .map((condition) => {
-        const jsonlogic = getInnermostKeyAndValue(condition);
-        if (!jsonlogic) {
-          return null;
-        }
-        if (isVariable(jsonlogic.value)) {
-          return getVariableValue(jsonlogic.value, localVariables);
-        }
-
-        return jsonlogic.value;
-      })
-      .filter(Boolean);
+          return jsonlogic.value;
+        })
+        .filter(Boolean);
+    }
   });
 }
 
-function getVariableValuesInExpression({ action, localVariables }) {
+export function getVariableValuesInExpression({ action, localVariables }) {
   const actionValue = action.value;
   const mode = actionValue?.mode;
   const value = actionValue?.value || actionValue?.result;
@@ -177,36 +204,44 @@ function getVariableValue(variableString: string, localVariables: VariableOption
   return getValuesByPath(ctx, getPath(variableString));
 }
 
-function getSubscriber({
-  action,
-  field,
-  rule,
-  variables,
-  localVariables,
-  variableNameOfLeftCondition,
-}: {
-  action: any;
-  field: any;
-  rule: any;
-  variables: VariablesContextType;
-  localVariables: VariableOption[];
-  /**
-   * used to parse the variable name of the left condition value
-   * @default '$nForm'
-   */
-  variableNameOfLeftCondition?: string;
-}): (value: string, oldValue: string) => void {
+function getSubscriber(
+  {
+    action,
+    field,
+    rule,
+    variables,
+    localVariables,
+    variableNameOfLeftCondition,
+  }: {
+    action: any;
+    field: any;
+    rule: any;
+    variables: VariablesContextType;
+    localVariables: VariableOption[];
+    /**
+     * used to parse the variable name of the left condition value
+     * @default '$nForm'
+     */
+    variableNameOfLeftCondition?: string;
+  },
+  jsonLogic,
+): (value: string, oldValue: string) => void {
   return () => {
     // 当条件改变触发 reaction 时，会同步收集字段状态，并保存到 field.stateOfLinkageRules 中
-    collectFieldStateOfLinkageRules({
-      operator: action.operator,
-      value: action.value,
-      field,
-      condition: rule.condition,
-      variables,
-      localVariables,
-      variableNameOfLeftCondition,
-    });
+    collectFieldStateOfLinkageRules(
+      {
+        operator: action.operator,
+        value: action.value,
+        field,
+        condition: rule.condition,
+        variables,
+        localVariables,
+        variableNameOfLeftCondition,
+        action,
+        conditionType: rule.conditionType,
+      },
+      jsonLogic,
+    );
 
     // 当条件改变时，有可能会触发多个 reaction，所以这里需要延迟一下，确保所有的 reaction 都执行完毕后，
     // 再从 field.stateOfLinkageRules 中取值，因为此时 field.stateOfLinkageRules 中的值才是全的。
@@ -231,13 +266,75 @@ function getSubscriber({
         if (stateList.length > 1) {
           field.value = lastState.value;
         }
-      } else {
-        field[fieldName] = lastState?.value;
-        requestAnimationFrame(() => {
-          field.setState((state) => {
-            state[fieldName] = lastState?.value;
-          });
+      } else if (fieldName === 'dateScope') {
+        field.setComponentProps({
+          _maxDate: lastState.value?._maxDate?.value || lastState.value?._maxDate,
+          _minDate: lastState.value?._minDate?.value || lastState.value?._minDate,
         });
+      } else {
+        // 为了让字段的默认值中的变量能正常工作，需要保证字段被隐藏时，字段组件依然会被渲染
+        if (fieldName === 'display' && lastState?.value === 'hidden') {
+          field.display = 'visible';
+          field.data = field.data || {};
+          // 在 FormItem 中有使用这个属性来判断字段是否被隐藏
+          field.data.hidden = true;
+
+          // 如果字段是必填的，并且被隐藏（保留值）了，那么就需要把 required 设置为 false，否则有可能会导致表单验证失败；
+          // 进而导致点击提交按钮无效的问题。
+          if (field.required) {
+            field.required = false;
+            field.data.prevRequired = true;
+          }
+
+          requestAnimationFrame(() => {
+            field.setState((state) => {
+              state.display = 'visible';
+            });
+          });
+        } else if (fieldName === 'dataSource') {
+          const lastValues = lastState?.value?.map((v) => v.value) || [];
+          if (
+            (field.value && !Array.isArray(field.value) && !lastValues.includes(field.value)) ||
+            (Array.isArray(field.value) && _.difference(field.value, lastValues).length > 0)
+          ) {
+            field.value = field.initialValue;
+          }
+          field[fieldName] = lastState?.value;
+          field.data = field.data || {};
+          requestAnimationFrame(() => {
+            field.setState((state) => {
+              state[fieldName] = lastState?.value;
+            });
+          });
+        } else if (fieldName === 'display' && lastState?.value === 'visible') {
+          field[fieldName] = lastState?.value;
+
+          if (fieldName === 'display' && lastState?.value === 'visible') {
+            field.data = field.data || {};
+            // 在 FormItem 中有使用这个属性来判断字段是否被隐藏
+            field.data.hidden = false;
+
+            // 当“隐藏（保留值）”的字段再次显示时，恢复“必填”的状态
+            if (field.data.prevRequired) {
+              delete field.data.prevRequired;
+              field.required = true;
+            }
+          }
+
+          requestAnimationFrame(() => {
+            field.setState((state) => {
+              state[fieldName] = lastState?.value;
+            });
+          });
+        } else {
+          field[fieldName] = lastState?.value;
+          requestAnimationFrame(() => {
+            field.setState((state) => {
+              state[fieldName] = lastState?.value;
+            });
+          });
+        }
+
         //字段隐藏时清空数据
         if (fieldName === 'display' && lastState?.value === 'none') {
           field.value = null;
@@ -264,37 +361,54 @@ function getFieldNameByOperator(operator: ActionType) {
       return 'pattern';
     case ActionType.Value:
       return 'value';
+    case ActionType.Options:
+      return 'dataSource';
+    case ActionType.DateScope:
+      return 'dateScope';
     default:
       return null;
   }
 }
 
-export const collectFieldStateOfLinkageRules = ({
-  operator,
-  value,
-  field,
-  condition,
-  variables,
-  localVariables,
-  variableNameOfLeftCondition,
-}: Props) => {
+export const collectFieldStateOfLinkageRules = (
+  {
+    operator,
+    value,
+    field,
+    condition,
+    variables,
+    localVariables,
+    variableNameOfLeftCondition,
+    action,
+    conditionType,
+  }: Props,
+  jsonLogic: any,
+) => {
   const requiredResult = field?.stateOfLinkageRules?.required || [field?.initStateOfLinkageRules?.required];
   const displayResult = field?.stateOfLinkageRules?.display || [field?.initStateOfLinkageRules?.display];
   const patternResult = field?.stateOfLinkageRules?.pattern || [field?.initStateOfLinkageRules?.pattern];
   const valueResult = field?.stateOfLinkageRules?.value || [field?.initStateOfLinkageRules?.value];
+  const optionsResult = field?.stateOfLinkageRules?.dataSource || [field?.initStateOfLinkageRules?.dataSource];
   const { evaluate } = evaluators.get('formula.js');
-  const paramsToGetConditionResult = { ruleGroup: condition, variables, localVariables, variableNameOfLeftCondition };
+  const paramsToGetConditionResult = {
+    ruleGroup: condition,
+    variables,
+    localVariables,
+    variableNameOfLeftCondition,
+    conditionType,
+  };
+  const dateScopeResult = field?.stateOfLinkageRules?.dateScope || [field?.initStateOfLinkageRules?.dateScope];
 
   switch (operator) {
     case ActionType.Required:
-      requiredResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult), true));
+      requiredResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), true));
       field.stateOfLinkageRules = {
         ...field.stateOfLinkageRules,
         required: requiredResult,
       };
       break;
     case ActionType.InRequired:
-      requiredResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult), false));
+      requiredResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), false));
       field.stateOfLinkageRules = {
         ...field.stateOfLinkageRules,
         required: requiredResult,
@@ -303,7 +417,7 @@ export const collectFieldStateOfLinkageRules = ({
     case ActionType.Visible:
     case ActionType.None:
     case ActionType.Hidden:
-      displayResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult), operator));
+      displayResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), operator));
       field.stateOfLinkageRules = {
         ...field.stateOfLinkageRules,
         display: displayResult,
@@ -312,7 +426,7 @@ export const collectFieldStateOfLinkageRules = ({
     case ActionType.Editable:
     case ActionType.ReadOnly:
     case ActionType.ReadPretty:
-      patternResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult), operator));
+      patternResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), operator));
       field.stateOfLinkageRules = {
         ...field.stateOfLinkageRules,
         pattern: patternResult,
@@ -347,7 +461,7 @@ export const collectFieldStateOfLinkageRules = ({
         if (isConditionEmpty(condition)) {
           valueResult.push(getTempFieldState(true, getValue()));
         } else {
-          valueResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult), getValue()));
+          valueResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), getValue()));
         }
         field.stateOfLinkageRules = {
           ...field.stateOfLinkageRules,
@@ -355,6 +469,29 @@ export const collectFieldStateOfLinkageRules = ({
         };
       }
       break;
+    case ActionType.Options:
+      {
+        const data = field.data?.dataSource?.filter((v) => value.value.includes(v.value));
+        optionsResult.push(getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), data || []));
+        field.stateOfLinkageRules = {
+          ...field.stateOfLinkageRules,
+          dataSource: optionsResult,
+        };
+      }
+      break;
+    case ActionType.DateScope: {
+      dateScopeResult.push(
+        getTempFieldState(conditionAnalyses(paramsToGetConditionResult, jsonLogic), {
+          _maxDate: action._maxDate,
+          _minDate: action._minDate,
+        }),
+      );
+      field.stateOfLinkageRules = {
+        ...field.stateOfLinkageRules,
+        dateScope: dateScopeResult,
+      };
+      break;
+    }
     default:
       return null;
   }
@@ -391,7 +528,7 @@ export async function replaceVariables(
   const scope = {};
 
   if (value == null) {
-    return;
+    return {};
   }
 
   const waitForParsing = value.match(REGEX_OF_VARIABLE_IN_EXPRESSION)?.map(async (item) => {

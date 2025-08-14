@@ -18,9 +18,12 @@ import { useTranslation } from 'react-i18next';
 import { useCompile } from '../..';
 import { DynamicComponent } from './DynamicComponent';
 import { ValueDynamicComponent } from './ValueDynamicComponent';
+import { OptionsComponent } from './OptionsComponent';
 import { LinkageLogicContext, RemoveActionContext } from './context';
 import { ActionType } from './type';
 import { useValues } from './useValues';
+import { DateScopeComponent } from './DateScopeComponent';
+import { FlagProvider, useFlag } from '../../flag-provider';
 
 export const FormFieldLinkageRuleAction = observer(
   (props: any) => {
@@ -28,6 +31,7 @@ export const FormFieldLinkageRuleAction = observer(
     const { t } = useTranslation();
     const compile = useCompile();
     const remove = useContext(RemoveActionContext);
+    const ctx = useFlag();
     const {
       schema,
       fields,
@@ -56,7 +60,7 @@ export const FormFieldLinkageRuleAction = observer(
               .ant-space-item {
                 max-width: 95%;
                 display: inline-block;
-                margin: 2px;
+                margin: 2px 6px;
                 vertical-align: top;
               }
             `}
@@ -82,6 +86,12 @@ export const FormFieldLinkageRuleAction = observer(
                 setDataIndex(value);
               }}
               placeholder={t('Select field')}
+              treeNodeFilterProp="title"
+              popupClassName={css`
+                .ant-select-tree-list-holder > div {
+                  overflow-y: auto !important;
+                }
+              `}
             />
             <Select
               // @ts-ignore
@@ -99,7 +109,25 @@ export const FormFieldLinkageRuleAction = observer(
               placeholder={t('action')}
             />
             {[ActionType.Value].includes(operator) && (
-              <ValueDynamicComponent
+              <FlagProvider {...ctx} collectionField={{ uiSchema: schema }}>
+                <ValueDynamicComponent
+                  fieldValue={fieldValue}
+                  schema={schema}
+                  setValue={setValue}
+                  collectionName={collectionName}
+                />
+              </FlagProvider>
+            )}
+            {[ActionType.Options].includes(operator) && (
+              <OptionsComponent
+                fieldValue={fieldValue}
+                schema={schema}
+                setValue={setValue}
+                collectionName={collectionName}
+              />
+            )}
+            {[ActionType.DateScope].includes(operator) && (
+              <DateScopeComponent
                 fieldValue={fieldValue}
                 schema={schema}
                 setValue={setValue}
@@ -107,7 +135,7 @@ export const FormFieldLinkageRuleAction = observer(
               />
             )}
             {!props.disabled && (
-              <a role="button" aria-label="icon-close">
+              <a role="button" aria-label="icon-close" style={{ verticalAlign: 'text-top' }}>
                 <CloseCircleOutlined onClick={() => remove()} style={{ color: '#bfbfbf' }} />
               </a>
             )}
@@ -183,68 +211,4 @@ export const FormButtonLinkageRuleAction = observer(
     );
   },
   { displayName: 'FormButtonLinkageRuleAction' },
-);
-
-export const FormStyleLinkageRuleAction = observer(
-  (props: any) => {
-    const { value, options, collectionName } = props;
-    const { t } = useTranslation();
-    const compile = useCompile();
-    const remove = useContext(RemoveActionContext);
-    const { operator, setOperator, value: fieldValue, setValue } = useValues(options);
-    const operators = useMemo(
-      () =>
-        compile([
-          { label: t('Color'), value: ActionType.Color, schema: {} },
-          { label: t('Background Color'), value: ActionType.BackgroundColor, schema: {} },
-        ]),
-      [compile, t],
-    );
-    const schema = {
-      type: 'string',
-      'x-decorator': 'FormItem',
-      'x-component': 'ColorPicker',
-      'x-component-props': {
-        defaultValue: '',
-      },
-    };
-
-    const onChange = useCallback(
-      (value) => {
-        setOperator(value);
-      },
-      [setOperator],
-    );
-
-    const closeStyle = useMemo(() => ({ color: '#bfbfbf' }), []);
-    return (
-      <div style={{ marginBottom: 8 }}>
-        <Space>
-          <Select
-            data-testid="select-linkage-properties"
-            popupMatchSelectWidth={false}
-            value={operator}
-            options={operators}
-            onChange={onChange}
-            placeholder={t('action')}
-          />
-          {[ActionType.Color, ActionType.BackgroundColor].includes(operator) && (
-            <ValueDynamicComponent
-              fieldValue={fieldValue}
-              schema={schema}
-              setValue={setValue}
-              collectionName={collectionName}
-              inputModes={['constant']}
-            />
-          )}
-          {!props.disabled && (
-            <a role="button" aria-label="icon-close">
-              <CloseCircleOutlined onClick={remove} style={closeStyle} />
-            </a>
-          )}
-        </Space>
-      </div>
-    );
-  },
-  { displayName: 'FormStyleLinkageRuleAction' },
 );

@@ -10,11 +10,11 @@
 import { Filter, InheritedCollection, UniqueConstraintError } from '@nocobase/database';
 import PluginErrorHandler from '@nocobase/plugin-error-handler';
 import { Plugin } from '@nocobase/server';
-import { Mutex } from 'async-mutex';
 import lodash from 'lodash';
 import path from 'path';
-import * as process from 'process';
 import { CollectionRepository } from '.';
+import { FieldIsDependedOnByOtherError } from './errors/field-is-depended-on-by-other';
+import { FieldNameExistsError } from './errors/field-name-exists-error';
 import {
   afterCreateForForeignKeyField,
   afterCreateForReverseField,
@@ -22,28 +22,25 @@ import {
   beforeDestroyForeignKey,
   beforeInitOptions,
 } from './hooks';
+import { beforeCreateCheckFieldInMySQL } from './hooks/beforeCreateCheckFieldInMySQL';
 import { beforeCreateForValidateField, beforeUpdateForValidateField } from './hooks/beforeCreateForValidateField';
 import { beforeCreateForViewCollection } from './hooks/beforeCreateForViewCollection';
+import { beforeDestoryField } from './hooks/beforeDestoryField';
 import { CollectionModel, FieldModel } from './models';
 import collectionActions from './resourcers/collections';
 import viewResourcer from './resourcers/views';
-import { FieldNameExistsError } from './errors/field-name-exists-error';
-import { beforeDestoryField } from './hooks/beforeDestoryField';
-import { FieldIsDependedOnByOtherError } from './errors/field-is-depended-on-by-other';
-import { beforeCreateCheckFieldInMySQL } from './hooks/beforeCreateCheckFieldInMySQL';
 
 export class PluginDataSourceMainServer extends Plugin {
-  public schema: string;
-
   private loadFilter: Filter = {};
 
   setLoadFilter(filter: Filter) {
     this.loadFilter = filter;
   }
 
-  async onSync(message) {
+  async handleSyncMessage(message) {
     const { type, collectionName } = message;
-    if (type === 'newCollection') {
+
+    if (type === 'syncCollection') {
       const collectionModel: CollectionModel = await this.app.db.getCollection('collections').repository.findOne({
         filter: {
           name: collectionName,
@@ -52,13 +49,29 @@ export class PluginDataSourceMainServer extends Plugin {
 
       await collectionModel.load();
     }
+
+    if (type === 'removeField') {
+      const { collectionName, fieldName } = message;
+      const collection = this.app.db.getCollection(collectionName);
+      if (!collection) {
+        return;
+      }
+
+      return collection.removeFieldFromDb(fieldName);
+    }
+
+    if (type === 'removeCollection') {
+      const { collectionName } = message;
+      const collection = this.app.db.getCollection(collectionName);
+      if (!collection) {
+        return;
+      }
+
+      collection.remove();
+    }
   }
 
   async beforeLoad() {
-    if (this.app.db.inDialect('postgres')) {
-      this.schema = process.env.COLLECTION_MANAGER_SCHEMA || this.db.options.schema || 'public';
-    }
-
     this.app.db.registerRepositories({
       CollectionRepository,
     });
@@ -76,13 +89,13 @@ export class PluginDataSourceMainServer extends Plugin {
       },
     });
 
-    this.app.db.on('collections.beforeCreate', async (model) => {
-      if (this.app.db.inDialect('postgres') && this.schema && model.get('from') != 'db2cm' && !model.get('schema')) {
-        model.set('schema', this.schema);
+    this.app.db.on('collections.beforeCreate', beforeCreateForViewCollection(this.db));
+
+    this.app.db.on('collections.beforeCreate', async (model: CollectionModel, options) => {
+      if (this.app.db.getCollection(model.get('name')) && model.get('from') !== 'db2cm' && !model.get('isThrough')) {
+        throw new Error(`Collection named ${model.get('name')} already exists`);
       }
     });
-
-    this.app.db.on('collections.beforeCreate', beforeCreateForViewCollection(this.db));
 
     this.app.db.on(
       'collections.afterSaveWithAssociations',
@@ -92,10 +105,15 @@ export class PluginDataSourceMainServer extends Plugin {
             transaction,
           });
 
-          this.app.syncManager.publish(this.name, {
-            type: 'newCollection',
-            collectionName: model.get('name'),
-          });
+          this.sendSyncMessage(
+            {
+              type: 'syncCollection',
+              collectionName: model.get('name'),
+            },
+            {
+              transaction,
+            },
+          );
         }
       },
     );
@@ -113,6 +131,16 @@ export class PluginDataSourceMainServer extends Plugin {
       }
 
       await model.remove(removeOptions);
+
+      this.sendSyncMessage(
+        {
+          type: 'removeCollection',
+          collectionName: model.get('name'),
+        },
+        {
+          transaction: options.transaction,
+        },
+      );
     });
 
     // 要在 beforeInitOptions 之前处理
@@ -262,6 +290,16 @@ export class PluginDataSourceMainServer extends Plugin {
         };
 
         await collection.sync(syncOptions);
+
+        this.sendSyncMessage(
+          {
+            type: 'syncCollection',
+            collectionName: model.get('collectionName'),
+          },
+          {
+            transaction,
+          },
+        );
       }
     });
 
@@ -269,10 +307,21 @@ export class PluginDataSourceMainServer extends Plugin {
     this.app.db.on('fields.beforeDestroy', beforeDestoryField(this.app.db));
     this.app.db.on('fields.beforeDestroy', beforeDestroyForeignKey(this.app.db));
 
-    const mutex = new Mutex();
     this.app.db.on('fields.beforeDestroy', async (model: FieldModel, options) => {
-      await mutex.runExclusive(async () => {
+      const lockKey = `${this.name}:fields.beforeDestroy:${model.get('collectionName')}`;
+      await this.app.lockManager.runExclusive(lockKey, async () => {
         await model.remove(options);
+
+        this.sendSyncMessage(
+          {
+            type: 'removeField',
+            collectionName: model.get('collectionName'),
+            fieldName: model.get('name'),
+          },
+          {
+            transaction: options.transaction,
+          },
+        );
       });
     });
 
@@ -317,7 +366,7 @@ export class PluginDataSourceMainServer extends Plugin {
 
     this.app.on('beforeStart', loadCollections);
 
-    this.app.resourcer.use(async (ctx, next) => {
+    this.app.resourceManager.use(async function pushUISchemaWhenUpdateCollectionField(ctx, next) {
       const { resourceName, actionName } = ctx.action;
       if (resourceName === 'collections.fields' && actionName === 'update') {
         const { updateAssociationValues = [] } = ctx.action.params;
@@ -328,8 +377,26 @@ export class PluginDataSourceMainServer extends Plugin {
       }
       await next();
     });
-
+    this.app.resourceManager.use(async function pushUISchemaWhenUpdateCollectionField(ctx, next) {
+      const { resourceName, actionName } = ctx.action;
+      if (resourceName === 'collections' && actionName === 'create') {
+        const { values } = ctx.action.params;
+        const keys = Object.keys(values);
+        const presetKeys = ['createdAt', 'createdBy', 'updatedAt', 'updatedBy'];
+        for (const presetKey of presetKeys) {
+          if (keys.includes(presetKey)) {
+            continue;
+          }
+          values[presetKey] = !!values.fields?.find((v) => v.name === presetKey);
+        }
+        ctx.action.mergeParams({
+          values,
+        });
+      }
+      await next();
+    });
     this.app.acl.allow('collections', 'list', 'loggedIn');
+    this.app.acl.allow('collections', 'listMeta', 'loggedIn');
     this.app.acl.allow('collectionCategories', 'list', 'loggedIn');
 
     this.app.acl.registerSnippet({
@@ -344,7 +411,6 @@ export class PluginDataSourceMainServer extends Plugin {
   }
 
   async load() {
-    await this.importCollections(path.resolve(__dirname, './collections'));
     this.db.getRepository<CollectionRepository>('collections').setApp(this.app);
 
     const errorHandlerPlugin = this.app.getPlugin<PluginErrorHandler>('error-handler');
@@ -397,7 +463,7 @@ export class PluginDataSourceMainServer extends Plugin {
       },
     );
 
-    this.app.resourcer.use(async (ctx, next) => {
+    this.app.resourceManager.use(async function mergeReverseFieldWhenSaveCollectionField(ctx, next) {
       if (ctx.action.resourceName === 'collections.fields' && ['create', 'update'].includes(ctx.action.actionName)) {
         ctx.action.mergeParams({
           updateAssociationValues: ['reverseField'],
@@ -438,7 +504,7 @@ export class PluginDataSourceMainServer extends Plugin {
       }
     };
 
-    this.app.resourcer.use(async (ctx, next) => {
+    this.app.resourceManager.use(async function handleFieldSourceMiddleware(ctx, next) {
       await next();
 
       // handle collections:list

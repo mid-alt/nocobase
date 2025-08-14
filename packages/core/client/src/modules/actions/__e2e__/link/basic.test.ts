@@ -28,8 +28,16 @@ test.describe('Link', () => {
 
     // 2. config the Link button
     await page.getByLabel('action-Action.Link-Link-customize:link-users-table-0').hover();
-    await page.getByRole('button', { name: 'designer-schema-settings-Action.Link-actionSettings:link-users' }).hover();
+    await expect(
+      page.getByRole('button', { name: 'designer-schema-settings-Action.Link-actionSettings:link-users' }),
+    ).toHaveCount(1);
+    await page
+      .getByRole('button', { name: 'designer-schema-settings-Action.Link-actionSettings:link-users' })
+      .first()
+      .hover();
+    await page.getByLabel('designer-schema-settings-Action.Link-actionSettings:link-users').first().hover();
     await page.getByRole('menuitem', { name: 'Edit link' }).click();
+    await page.getByLabel('block-item-users-table-URL').getByLabel('textbox').click();
     await page
       .getByLabel('block-item-users-table-URL')
       .getByLabel('textbox')
@@ -64,10 +72,10 @@ test.describe('Link', () => {
     await expect(page.getByRole('button', { name: users[1].username, exact: true })).toBeVisible();
 
     // 4. click the Link button，check the data of the table block
-    await page.getByLabel('action-Action.Link-Link-customize:link-users-table-0').click();
-    await expect(page.getByRole('button', { name: users[0].username, exact: true })).not.toBeVisible();
+    await page.getByLabel('action-Action.Link-Link-customize:link-users-table-1').click();
+    await expect(page.getByRole('button', { name: users[1].username, exact: true })).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'nocobase', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: users[1].username, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: users[0].username, exact: true })).toBeVisible();
 
     // 5. Change the operator of the data scope from "is not" to "is"
     await page.getByLabel('block-item-CardItem-users-').hover();
@@ -79,15 +87,15 @@ test.describe('Link', () => {
     await page.getByRole('menuitemcheckbox', { name: 'URL search params right' }).click();
     await page.getByRole('menuitemcheckbox', { name: 'id', exact: true }).click();
     await page.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(page.getByRole('button', { name: users[0].username, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: users[1].username, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'nocobase', exact: true })).not.toBeVisible();
-    await expect(page.getByRole('button', { name: users[1].username, exact: true })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: users[0].username, exact: true })).not.toBeVisible();
 
     // 6. Re-enter the page (to eliminate the query string in the URL), at this time the value of the variable is undefined, and all data should be displayed
     await nocoPage.goto();
-    await expect(page.getByRole('button', { name: users[0].username, exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'nocobase', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: users[1].username, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'nocobase', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: users[0].username, exact: true })).toBeVisible();
   });
 
   test('open in new window', async ({ page, mockPage, mockRecords }) => {
@@ -102,7 +110,7 @@ test.describe('Link', () => {
     await page.getByLabel('block-item-users-table-URL').getByLabel('textbox').fill(otherPageUrl);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
 
-    await page.getByLabel('action-Action.Link-Link-').click();
+    await page.getByLabel('action-Action.Link-Link-').first().click();
     expect(page.url().endsWith(otherPageUrl)).toBe(true);
 
     // 开启 “Open in new window” 选项后，点击链接按钮会在新窗口打开
@@ -152,6 +160,6 @@ test.describe('Link', () => {
     // After clicking the Link button, the browser URL will change, and the value of the input box using variables will be updated
     await page.getByLabel('action-Action.Link-Link-').click();
     await page.waitForTimeout(100);
-    await expect(page.getByLabel('block-item-CollectionField-')).toHaveText(`Roles:adminmemberroot`);
+    await expect(page.getByLabel('block-item-CollectionField-')).toContainText(`Roles:adminmemberroot`);
   });
 });

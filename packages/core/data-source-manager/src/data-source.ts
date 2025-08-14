@@ -8,34 +8,36 @@
  */
 
 import { ACL } from '@nocobase/acl';
+import { Logger } from '@nocobase/logger';
 import { getNameByParams, parseRequest, ResourceManager } from '@nocobase/resourcer';
+import { wrapMiddlewareWithLogging } from '@nocobase/utils';
 import EventEmitter from 'events';
 import compose from 'koa-compose';
+import { DataSourceManager } from './data-source-manager';
 import { loadDefaultActions } from './load-default-actions';
 import { ICollectionManager } from './types';
-import { Logger } from '@nocobase/logger';
 
 export type DataSourceOptions = any;
+
+export type LoadingProgress = {
+  total: number;
+  loaded: number;
+};
 
 export abstract class DataSource extends EventEmitter {
   public collectionManager: ICollectionManager;
   public resourceManager: ResourceManager;
   public acl: ACL;
+  public dataSourceManager: DataSourceManager;
+
   logger: Logger;
-  _sqlLogger: Logger;
 
   constructor(protected options: DataSourceOptions) {
     super();
     this.init(options);
   }
 
-  setLogger(logger: Logger) {
-    this.logger = logger;
-  }
-
-  setSqlLogger(logger: Logger) {
-    this._sqlLogger = logger;
-  }
+  _sqlLogger: Logger;
 
   get sqlLogger() {
     return this._sqlLogger || this.logger;
@@ -49,6 +51,18 @@ export abstract class DataSource extends EventEmitter {
     return Promise.resolve(true);
   }
 
+  setDataSourceManager(dataSourceManager: DataSourceManager) {
+    this.dataSourceManager = dataSourceManager;
+  }
+
+  setLogger(logger: Logger) {
+    this.logger = logger;
+  }
+
+  setSqlLogger(logger: Logger) {
+    this._sqlLogger = logger;
+  }
+
   init(options: DataSourceOptions = {}) {
     this.acl = this.createACL();
 
@@ -58,6 +72,9 @@ export abstract class DataSource extends EventEmitter {
     });
 
     this.collectionManager = this.createCollectionManager(options);
+    if (this.collectionManager) {
+      this.collectionManager.setDataSource(this);
+    }
     this.resourceManager.registerActionHandlers(loadDefaultActions());
 
     if (options.acl !== false) {
@@ -72,6 +89,7 @@ export abstract class DataSource extends EventEmitter {
       for (const [fn, options] of middlewares) {
         this.resourceManager.use(fn, options);
       }
+
       this['_used'] = true;
     }
 
@@ -84,7 +102,9 @@ export abstract class DataSource extends EventEmitter {
         return this.collectionManager.getRepository(resourceName, resourceOf);
       };
 
-      return compose([this.collectionToResourceMiddleware(), this.resourceManager.middleware()])(ctx, next);
+      const middlewares = [this.collectionToResourceMiddleware(), this.resourceManager.middleware()];
+
+      return compose(middlewares.map((fn) => wrapMiddlewareWithLogging(fn)))(ctx, next);
     };
   }
 
@@ -100,21 +120,26 @@ export abstract class DataSource extends EventEmitter {
     return null;
   }
 
+  emitLoadingProgress(progress: LoadingProgress) {
+    this.emit('loadingProgress', progress);
+  }
+
   async load(options: any = {}) {}
   async close() {}
 
   abstract createCollectionManager(options?: any): ICollectionManager;
 
   protected collectionToResourceMiddleware() {
-    return async (ctx, next) => {
+    const self = this;
+    return async function collectionToResource(ctx, next) {
       const params = parseRequest(
         {
           path: ctx.request.path,
           method: ctx.request.method,
         },
         {
-          prefix: this.resourceManager.options.prefix,
-          accessors: this.resourceManager.options.accessors,
+          prefix: self.resourceManager.options.prefix,
+          accessors: self.resourceManager.options.accessors,
         },
       );
       if (!params) {
@@ -122,7 +147,7 @@ export abstract class DataSource extends EventEmitter {
       }
       const resourceName = getNameByParams(params);
       // 如果资源名称未被定义
-      if (this.resourceManager.isDefined(resourceName)) {
+      if (self.resourceManager.isDefined(resourceName)) {
         return next();
       }
 
@@ -130,11 +155,11 @@ export abstract class DataSource extends EventEmitter {
 
       const collectionName = splitResult[0];
 
-      if (!this.collectionManager.hasCollection(collectionName)) {
+      if (!self.collectionManager.hasCollection(collectionName)) {
         return next();
       }
 
-      this.resourceManager.define({
+      self.resourceManager.define({
         name: resourceName,
       });
 

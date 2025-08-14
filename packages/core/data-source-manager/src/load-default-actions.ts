@@ -8,9 +8,7 @@
  */
 
 import { list } from './default-actions/list';
-import { createMoveAction } from './default-actions/move';
 import { proxyToRepository } from './default-actions/proxy-to-repository';
-import globalActions from '@nocobase/actions';
 
 type Actions = { [key: string]: { params: Array<string> | ((ctx: any) => Array<string>); method: string } };
 
@@ -47,11 +45,11 @@ const actions: Actions = {
     method: 'destroy',
   },
   firstOrCreate: {
-    params: ['values', 'filterKeys'],
+    params: ['values', 'filterKeys', 'whitelist', 'blacklist', 'updateAssociationValues', 'targetCollection'],
     method: 'firstOrCreate',
   },
   updateOrCreate: {
-    params: ['values', 'filterKeys'],
+    params: ['values', 'filterKeys', 'whitelist', 'blacklist', 'updateAssociationValues', 'targetCollection'],
     method: 'updateOrCreate',
   },
   remove: {
@@ -81,6 +79,5 @@ export function loadDefaultActions() {
       return carry;
     }, {}),
     list,
-    move: createMoveAction(globalActions.move),
   };
 }

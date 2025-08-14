@@ -41,6 +41,21 @@ describe('workflow > Processor', () => {
   afterEach(() => app.destroy());
 
   describe('base', () => {
+    it.skipIf(process.env['DB_DIALECT'] === 'sqlite')('job id out of max safe integer', async () => {
+      const JobModel = db.getModel('jobs');
+
+      const records = await JobModel.bulkCreate([
+        {
+          id: '10267424896650240',
+        },
+        {
+          id: '10267424930204672',
+        },
+      ]);
+
+      expect(records.length).toBe(2);
+    });
+
     it('empty workflow without any nodes', async () => {
       const post = await PostRepo.create({ values: { title: 't1' } });
 

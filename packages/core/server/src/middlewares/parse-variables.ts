@@ -36,7 +36,7 @@ function isNumeric(str: any) {
   return !isNaN(str as any) && !isNaN(parseFloat(str));
 }
 
-export const parseVariables = async (ctx, next) => {
+export async function parseVariables(ctx, next) {
   const filter = ctx.action.params.filter;
   if (!filter) {
     return next();
@@ -62,8 +62,8 @@ export const parseVariables = async (ctx, next) => {
       // 新的命名方式，防止和 formily 内置变量冲突
       $nDate: getDateVars(),
       $user: getUser(ctx),
-      $nRole: ctx.state.currentRole,
+      $nRole: ctx.state.currentRole === '__union__' ? ctx.state.currentRoles : ctx.state.currentRole,
     },
   });
   await next();
-};
+}

@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { sleep } from '@nocobase/test';
 import { lodash } from '@nocobase/utils';
 
 export default {
@@ -15,6 +16,21 @@ export default {
       return {
         status: 1,
         result: config.path == null ? result : lodash.get(result, config.path),
+      };
+    },
+    test(config = {}) {
+      return {
+        status: 1,
+        result: null,
+      };
+    },
+  },
+
+  echoVariable: {
+    run({ id, config = {} }: any, job, processor) {
+      return {
+        status: 1,
+        result: config.variable ? processor.getParsedValue(config.variable, id) : null,
       };
     },
   },
@@ -27,6 +43,17 @@ export default {
 
   pending: {
     run(node, input, processor) {
+      return {
+        status: 0,
+      };
+    },
+    resume(node, job) {
+      if (node.config.status != null) {
+        job.set('status', node.config.status);
+      }
+      return job;
+    },
+    test() {
       return {
         status: 0,
       };
@@ -55,6 +82,49 @@ export default {
     resume(node, input, processor) {
       throw new Error('input failed');
       return null;
+    },
+  },
+
+  asyncResume: {
+    async run(node, input, processor) {
+      const job = processor.saveJob({
+        status: 0,
+        nodeId: node.id,
+        nodeKey: node.key,
+        upstreamId: input?.id ?? null,
+      });
+
+      setTimeout(() => {
+        job.set({
+          status: 1,
+        });
+
+        processor.options.plugin.resume(job);
+      }, 100);
+
+      return null;
+    },
+    resume(node, job, processor) {
+      return job;
+    },
+  },
+
+  timeConsume: {
+    async run({ config }, input, processor) {
+      const { duration = 1000 } = config;
+      await sleep(duration);
+      return {
+        status: 1,
+      };
+    },
+  },
+
+  recordAppId: {
+    run(node, input, processor) {
+      return {
+        status: 1,
+        result: processor.options.plugin.app.instanceId,
+      };
     },
   },
 

@@ -24,10 +24,10 @@ describe('workflow > actions > executions', () => {
 
   beforeEach(async () => {
     app = await getApp({
-      plugins: ['users', 'acl', 'auth', 'data-source-manager'],
+      plugins: ['users', 'acl', 'auth', 'data-source-manager', 'system-settings'],
       acl: true,
     });
-    agent = app.agent().loginUsingId(1);
+    agent = await app.agent().loginUsingId(1);
     db = app.db;
     WorkflowModel = db.getCollection('workflows').model;
     PostRepo = db.getCollection('posts').repository;
@@ -47,7 +47,7 @@ describe('workflow > actions > executions', () => {
         { id: 3, nickname: 'b' },
       ],
     });
-    userAgents = users.map((user) => app.agent().login(user));
+    userAgents = await Promise.all(users.map((user) => app.agent().login(user)));
   });
 
   afterEach(async () => await app.destroy());
@@ -162,9 +162,9 @@ describe('workflow > actions > executions', () => {
 
       const e2 = await workflow.getExecutions();
       expect(e2.length).toBe(1);
-      expect(e2[0].get('status')).toBe(EXECUTION_STATUS.CANCELED);
+      expect(e2[0].get('status')).toBe(EXECUTION_STATUS.ABORTED);
       const jobs = await e2[0].getJobs();
-      expect(jobs[0].status).toBe(JOB_STATUS.CANCELED);
+      expect(jobs[0].status).toBe(JOB_STATUS.ABORTED);
     });
   });
 });

@@ -11,15 +11,19 @@ import { SchemaInitializerItemType, parseCollectionName, useCollectionDataSource
 
 import { CollectionBlockInitializer } from '../../components/CollectionBlockInitializer';
 import { NAMESPACE, lang } from '../../locale';
-import { getCollectionFieldOptions, useGetCollectionFields } from '../../variable';
+import { getCollectionFieldOptions, useGetDataSourceCollectionManager } from '../../variable';
 import { Trigger } from '..';
 import { ScheduleConfig } from './ScheduleConfig';
 import { SCHEDULE_MODE } from './constants';
+import { TriggerScheduleConfig } from './TriggerScheduleConfig';
+import { ScheduleModes } from './ScheduleModes';
+import { WorkflowVariableWrapper } from '../../variable';
+import { TriggerCollectionRecordSelect } from '../../components/TriggerCollectionRecordSelect';
 
 function useVariables(config, opts) {
   const [dataSourceName, collection] = parseCollectionName(config.collection);
   const compile = useCompile();
-  const getCollectionFields = useGetCollectionFields(dataSourceName);
+  const collectionManager = useGetDataSourceCollectionManager(dataSourceName);
   const options: any[] = [];
   if (!opts?.types || opts.types.includes('date')) {
     options.push({ key: 'date', value: 'date', label: lang('Trigger time') });
@@ -46,7 +50,7 @@ function useVariables(config, opts) {
         },
       ],
       compile,
-      getCollectionFields,
+      collectionManager,
     });
     if (fieldOption) {
       options.push(fieldOption);
@@ -66,11 +70,27 @@ export default class extends Trigger {
       'x-component-props': {},
     },
   };
+  triggerFieldset = {
+    proxy: {
+      type: 'void',
+      'x-component': 'TriggerScheduleConfig',
+    },
+  };
+  validate(config) {
+    if (config.mode == null) {
+      return false;
+    }
+    const { validate } = ScheduleModes[config.mode];
+    return validate ? validate(config) : true;
+  }
   scope = {
     useCollectionDataSource,
   };
   components = {
     ScheduleConfig,
+    TriggerScheduleConfig,
+    TriggerCollectionRecordSelect,
+    WorkflowVariableWrapper,
   };
   useVariables = useVariables;
   useInitializers(config): SchemaInitializerItemType | null {

@@ -11,10 +11,16 @@ import { useField, useFieldSchema, useForm } from '@formily/react';
 import {
   useAPIClient,
   useActionContext,
+  useBlockContext,
+  useCollectionRecordData,
   useCompile,
   useDataSourceKey,
   useNavigateNoUpdate,
-  useRecord,
+  useBlockRequestContext,
+  useContextVariable,
+  useLocalVariables,
+  useVariables,
+  getVariableValue,
 } from '@nocobase/client';
 import { isURL } from '@nocobase/utils/client';
 import { App } from 'antd';
@@ -24,49 +30,83 @@ export const useCustomizeRequestActionProps = () => {
   const apiClient = useAPIClient();
   const navigate = useNavigateNoUpdate();
   const actionSchema = useFieldSchema();
+  const { field } = useBlockRequestContext();
   const compile = useCompile();
   const form = useForm();
-  // const { getPrimaryKey } = useCollection_deprecated();
-  const record = useRecord();
+  const { name: blockType } = useBlockContext() || {};
+  const recordData = useCollectionRecordData();
   const fieldSchema = useFieldSchema();
   const actionField = useField();
   const { setVisible } = useActionContext();
   const { modal, message } = App.useApp();
   const dataSourceKey = useDataSourceKey();
+  const { ctx } = useContextVariable();
+  const localVariables = useLocalVariables();
+  const variables = useVariables();
+
   return {
     async onClick(e?, callBack?) {
+      const selectedRecord = field?.data?.selectedRowData ? field?.data?.selectedRowData : ctx;
       const { skipValidator, onSuccess } = actionSchema?.['x-action-settings'] ?? {};
+      const {
+        manualClose,
+        redirecting,
+        redirectTo: rawRedirectTo,
+        successMessage: rawSuccessMessage,
+        actionAfterSuccess,
+      } = onSuccess || {};
+      let successMessage = rawSuccessMessage;
+      let redirectTo = rawRedirectTo;
       const xAction = actionSchema?.['x-action'];
       if (skipValidator !== true && xAction === 'customize:form:request') {
         await form.submit();
       }
 
-      let formValues = { ...record };
+      let currentRecordData = { ...recordData };
       if (xAction === 'customize:form:request') {
-        formValues = form.values;
+        currentRecordData = form.values;
       }
 
       actionField.data ??= {};
       actionField.data.loading = true;
       try {
+        const requestId = fieldSchema['x-custom-request-id'] || fieldSchema['x-uid'];
         const res = await apiClient.request({
-          url: `/customRequests:send/${fieldSchema['x-uid']}`,
+          url: `/customRequests:send/${requestId}`,
           method: 'POST',
           data: {
             currentRecord: {
-              // id: record[getPrimaryKey()],
-              // appends: result.params[0]?.appends,
               dataSourceKey,
-              data: formValues,
+              data: currentRecordData,
             },
+            $nForm: blockType === 'form' ? form.values : undefined,
+            $nSelectedRecord: selectedRecord,
           },
           responseType: fieldSchema['x-response-type'] === 'stream' ? 'blob' : 'json',
         });
+        successMessage = await getVariableValue(successMessage, {
+          variables,
+          localVariables: [
+            ...localVariables,
+            { name: '$nResponse', ctx: new Proxy({ ...res?.data?.data, ...res?.data }, {}) },
+          ],
+        });
+
+        if (rawRedirectTo) {
+          // eslint-disable-next-line react-hooks/rules-of-hooks
+          redirectTo = await getVariableValue(rawRedirectTo, {
+            variables,
+            localVariables,
+          });
+        }
         if (res.headers['content-disposition']) {
-          const regex = /attachment;\s*filename="([^"]+)"/;
-          const match = res.headers['content-disposition'].match(regex);
-          if (match[1]) {
-            saveAs(res.data, match[1]);
+          const contentDisposition = res.headers['content-disposition'];
+          const utf8Match = contentDisposition.match(/filename\*=utf-8''([^;]+)/i);
+          const asciiMatch = contentDisposition.match(/filename="([^"]+)"/i);
+          if (utf8Match) {
+            saveAs(res.data, decodeURIComponent(utf8Match[1]));
+          } else if (asciiMatch) {
+            saveAs(res.data, asciiMatch[1]);
           }
         }
         actionField.data.loading = false;
@@ -74,32 +114,39 @@ export const useCustomizeRequestActionProps = () => {
         if (callBack) {
           callBack?.();
         }
-        if (xAction === 'customize:form:request') {
+        if (actionAfterSuccess === 'previous' || (!actionAfterSuccess && redirecting !== true)) {
           setVisible?.(false);
         }
-        if (!onSuccess?.successMessage) {
+        if (!successMessage) {
+          if (((redirecting && !actionAfterSuccess) || actionAfterSuccess === 'redirect') && redirectTo) {
+            if (isURL(redirectTo)) {
+              window.location.href = redirectTo;
+            } else {
+              navigate(redirectTo);
+            }
+          }
           return;
         }
-        if (onSuccess?.manualClose) {
+        if (manualClose) {
           modal.success({
-            title: compile(onSuccess?.successMessage),
+            title: compile(successMessage),
             onOk: async () => {
-              if (onSuccess?.redirecting && onSuccess?.redirectTo) {
-                if (isURL(onSuccess.redirectTo)) {
-                  window.location.href = onSuccess.redirectTo;
+              if (((redirecting && !actionAfterSuccess) || actionAfterSuccess === 'redirect') && redirectTo) {
+                if (isURL(redirectTo)) {
+                  window.location.href = redirectTo;
                 } else {
-                  navigate(onSuccess.redirectTo);
+                  navigate(redirectTo);
                 }
               }
             },
           });
         } else {
-          message.success(compile(onSuccess?.successMessage));
-          if (onSuccess?.redirecting && onSuccess?.redirectTo) {
-            if (isURL(onSuccess.redirectTo)) {
-              window.location.href = onSuccess.redirectTo;
+          message.success(compile(successMessage));
+          if (((redirecting && !actionAfterSuccess) || actionAfterSuccess === 'redirect') && redirectTo) {
+            if (isURL(redirectTo)) {
+              window.location.href = redirectTo;
             } else {
-              navigate(onSuccess.redirectTo);
+              navigate(redirectTo);
             }
           }
         }

@@ -7,16 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import React, { useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { uniqBy } from 'lodash';
+import React, { createContext, useCallback, useContext } from 'react';
 
-import { Variable, parseCollectionName, useApp, useCompile, usePlugin } from '@nocobase/client';
+import {
+  CollectionManager,
+  Variable,
+  parseCollectionName,
+  useApp,
+  useCompile,
+  useGlobalVariable,
+  usePlugin,
+} from '@nocobase/client';
 
-import { useFlowContext } from './FlowContext';
-import { NAMESPACE, lang } from './locale';
-import { useAvailableUpstreams, useNodeContext, useUpstreamScopes } from './nodes';
 import WorkflowPlugin from '.';
+import { useFlowContext } from './FlowContext';
+import { NAMESPACE } from './locale';
+import { useAvailableUpstreams, useNodeContext, useUpstreamScopes } from './nodes';
 
 export type VariableOption = {
   key?: string;
@@ -39,7 +46,7 @@ export type VariableDataType =
         entity?: boolean;
       };
     }
-  | ((field: any) => boolean);
+  | ((field: any, options: { collectionManager?: CollectionManager }) => boolean);
 
 export type UseVariableOptions = {
   types?: VariableDataType[];
@@ -53,114 +60,6 @@ export type UseVariableOptions = {
 };
 
 export const defaultFieldNames = { label: 'label', value: 'value', children: 'children' } as const;
-
-const getDateOptions = (t) => [
-  {
-    key: 'yesterday',
-    value: 'yesterday',
-    label: t('Yesterday'),
-  },
-  {
-    key: 'today',
-    value: 'today',
-    label: t('Today'),
-  },
-  {
-    key: 'tomorrow',
-    value: 'tomorrow',
-    label: t('Tomorrow'),
-  },
-  {
-    key: 'lastWeek',
-    value: 'lastWeek',
-    label: t('Last week'),
-  },
-  {
-    key: 'thisWeek',
-    value: 'thisWeek',
-    label: t('This week'),
-  },
-  {
-    key: 'nextWeek',
-    value: 'nextWeek',
-    label: t('Next week'),
-  },
-  {
-    key: 'lastMonth',
-    value: 'lastMonth',
-    label: t('Last month'),
-  },
-  {
-    key: 'thisMonth',
-    value: 'thisMonth',
-    label: t('This month'),
-  },
-  {
-    key: 'nextMonth',
-    value: 'nextMonth',
-    label: t('Next month'),
-  },
-  {
-    key: 'lastQuarter',
-    value: 'lastQuarter',
-    label: t('Last quarter'),
-  },
-  {
-    key: 'thisQuarter',
-    value: 'thisQuarter',
-    label: t('This quarter'),
-  },
-  {
-    key: 'nextQuarter',
-    value: 'nextQuarter',
-    label: t('Next quarter'),
-  },
-  {
-    key: 'lastYear',
-    value: 'lastYear',
-    label: t('Last year'),
-  },
-  {
-    key: 'thisYear',
-    value: 'thisYear',
-    label: t('This year'),
-  },
-  {
-    key: 'nextYear',
-    value: 'nextYear',
-    label: t('Next year'),
-  },
-  {
-    key: 'last7Days',
-    value: 'last7Days',
-    label: t('Last 7 days'),
-  },
-  {
-    key: 'next7Days',
-    value: 'next7Days',
-    label: t('Next 7 days'),
-  },
-  {
-    key: 'last30Days',
-    value: 'last30Days',
-    label: t('Last 30 days'),
-  },
-  {
-    key: 'next30Days',
-    value: 'next30Days',
-    label: t('Next 30 days'),
-  },
-  {
-    key: 'last90Days',
-    value: 'last90Days',
-    label: t('Last 90 days'),
-  },
-  {
-    key: 'next90Days',
-    value: 'next90Days',
-    label: t('Next 90 days'),
-  },
-];
 
 export const nodesOptions = {
   label: `{{t("Node result", { ns: "${NAMESPACE}" })}}`,
@@ -221,52 +120,32 @@ export const scopeOptions = {
 export const systemOptions = {
   label: `{{t("System variables", { ns: "${NAMESPACE}" })}}`,
   value: '$system',
-  useOptions({ types, fieldNames = defaultFieldNames }: UseVariableOptions) {
-    const { t } = useTranslation();
-    return [
-      ...(!types || types.includes('date')
-        ? [
-            {
-              key: 'now',
-              [fieldNames.label]: lang('System time'),
-              [fieldNames.value]: 'now',
-            },
-            {
-              key: 'dateRange',
-              [fieldNames.label]: lang('Date range'),
-              [fieldNames.value]: 'dateRange',
-              children: getDateOptions(t),
-            },
-          ]
-        : []),
-    ];
+  useOptions(options: UseVariableOptions) {
+    const { systemVariables } = usePlugin(WorkflowPlugin);
+    const compile = useCompile();
+    return compile(Array.from(systemVariables.getValues()));
   },
 };
 
+/**
+ * @deprecated
+ */
 export const BaseTypeSets = {
   boolean: new Set(['checkbox']),
   number: new Set(['integer', 'number', 'percent']),
-  string: new Set([
-    'input',
-    'password',
-    'email',
-    'phone',
-    'select',
-    'radioGroup',
-    'text',
-    'markdown',
-    'richText',
-    'expression',
-    'time',
-  ]),
-  date: new Set(['date', 'createdAt', 'updatedAt']),
+  string: new Set(['input', 'password', 'email', 'phone', 'select', 'radioGroup', 'text', 'markdown', 'richText']),
+  date: new Set(['datetime', 'datetimeNoTz', 'dateOnly', 'createdAt', 'updatedAt']),
 };
 
 // { type: 'reference', options: { collection: 'users', multiple: false } }
 // { type: 'reference', options: { collection: 'attachments', multiple: false } }
 // { type: 'reference', options: { collection: 'myExpressions', entity: false } }
 
-function matchFieldType(field, type: VariableDataType): boolean {
+function matchFieldType(
+  field,
+  type: VariableDataType,
+  { collectionManager }: { collectionManager?: CollectionManager },
+): boolean {
   if (typeof type === 'string') {
     return BaseTypeSets[type]?.has(field.interface);
   }
@@ -287,7 +166,7 @@ function matchFieldType(field, type: VariableDataType): boolean {
   }
 
   if (typeof type === 'function') {
-    return type(field);
+    return type(field, { collectionManager });
   }
 
   return false;
@@ -305,9 +184,9 @@ function getNextAppends(field, appends: string[] | null): string[] | null {
   return appends.filter((item) => item.startsWith(fieldPrefix)).map((item) => item.replace(fieldPrefix, ''));
 }
 
-function filterTypedFields({ fields, types, appends, depth = 1, compile, getCollectionFields }) {
+function filterTypedFields({ fields, types, appends, depth = 1, compile, collectionManager }) {
   return fields.filter((field) => {
-    const match = types?.length ? types.some((type) => matchFieldType(field, type)) : true;
+    const match = types?.length ? types.some((type) => matchFieldType(field, type, { collectionManager })) : true;
     if (isAssociationField(field)) {
       if (appends === null) {
         if (!depth) {
@@ -316,12 +195,12 @@ function filterTypedFields({ fields, types, appends, depth = 1, compile, getColl
         return (
           match ||
           filterTypedFields({
-            fields: getNormalizedFields(field.target, { compile, getCollectionFields }),
+            fields: getNormalizedFields(field.target, { compile, collectionManager }),
             types,
             depth: depth - 1,
             appends,
             compile,
-            getCollectionFields,
+            collectionManager,
           })
         );
       }
@@ -333,12 +212,12 @@ function filterTypedFields({ fields, types, appends, depth = 1, compile, getColl
         return (
           (nextAppends?.length || included) &&
           filterTypedFields({
-            fields: getNormalizedFields(field.target, { compile, getCollectionFields }),
+            fields: getNormalizedFields(field.target, { compile, collectionManager }),
             types,
             // depth: depth - 1,
             appends: nextAppends,
             compile,
-            getCollectionFields,
+            collectionManager,
           }).length
         );
       }
@@ -369,17 +248,17 @@ export function useWorkflowVariableOptions(options: UseVariableOptions = {}) {
     useOptions(nodesOptions, opts),
     useOptions(triggerOptions, opts),
     useOptions(systemOptions, opts),
-  ];
+    useGlobalVariable('$env'),
+  ].filter(Boolean);
   // const cache = useMemo(() => result, [result]);
-
   return result;
 }
 
-function getNormalizedFields(collectionName, { compile, getCollectionFields }) {
+function getNormalizedFields(collectionName, { compile, collectionManager }) {
   // NOTE: for compatibility with legacy version
   const [dataSourceName, collection] = parseCollectionName(collectionName);
   // NOTE: `dataSourceName` will be ignored in new version
-  const fields = getCollectionFields(collection, dataSourceName);
+  const fields = collectionManager.getCollectionAllFields(collection);
   const fkFields: any[] = [];
   const result: any[] = [];
   fields.forEach((field) => {
@@ -448,7 +327,9 @@ function loadChildren(option) {
     option.children = result;
   } else {
     option.isLeaf = true;
-    const matchingType = option.types ? option.types.some((type) => matchFieldType(option.field, type)) : true;
+    const matchingType = option.types
+      ? option.types.some((type) => matchFieldType(option.field, type, { collectionManager: this.collectionManager }))
+      : true;
     if (!matchingType) {
       option.disabled = true;
     }
@@ -463,11 +344,11 @@ export function getCollectionFieldOptions(options): VariableOption[] {
     appends = [],
     depth = 1,
     compile,
-    getCollectionFields,
+    collectionManager,
     fieldNames = defaultFieldNames,
   } = options;
-  const computedFields = fields ?? getNormalizedFields(collection, { compile, getCollectionFields });
-  const boundLoadChildren = loadChildren.bind({ compile, getCollectionFields, fieldNames });
+  const computedFields = fields ?? getNormalizedFields(collection, { compile, collectionManager });
+  const boundLoadChildren = loadChildren.bind({ compile, collectionManager, fieldNames });
 
   const result: VariableOption[] = filterTypedFields({
     fields: computedFields,
@@ -475,7 +356,7 @@ export function getCollectionFieldOptions(options): VariableOption[] {
     depth,
     appends,
     compile,
-    getCollectionFields,
+    collectionManager,
   }).map((field) => {
     const label = compile(field.uiSchema?.title || field.name);
     const nextAppends = getNextAppends(field, appends);
@@ -499,11 +380,11 @@ export function getCollectionFieldOptions(options): VariableOption[] {
   return result;
 }
 
-export function useGetCollectionFields(dataSourceName?) {
+export function useGetDataSourceCollectionManager(dataSourceName?) {
   const app = useApp();
   const { collectionManager } = app.dataSourceManager.getDataSource(dataSourceName);
 
-  return useCallback((collectionName) => collectionManager.getCollectionAllFields(collectionName), [collectionManager]);
+  return collectionManager;
 }
 
 export function WorkflowVariableInput({ variableOptions, ...props }): JSX.Element {
@@ -524,4 +405,35 @@ export function WorkflowVariableRawTextArea({ variableOptions, ...props }): JSX.
 export function WorkflowVariableJSON({ variableOptions, ...props }): JSX.Element {
   const scope = useWorkflowVariableOptions(variableOptions);
   return <Variable.JSON scope={scope} {...props} />;
+}
+
+/**
+ * @experimental
+ */
+export function WorkflowVariableWrapper(props): JSX.Element {
+  const { render, variableOptions, changeOnSelect, nullable, ...others } = props;
+  const hideVariable = useHideVariable();
+  const scope = useWorkflowVariableOptions(variableOptions);
+
+  if (!hideVariable && scope?.length > 0) {
+    return (
+      <Variable.Input scope={scope} changeOnSelect={changeOnSelect} nullable={nullable} {...others}>
+        {render?.(others)}
+      </Variable.Input>
+    );
+  }
+
+  return render?.(others);
+}
+
+/**
+ * @experimental
+ */
+export const HideVariableContext = createContext(false);
+
+/**
+ * @experimental
+ */
+export function useHideVariable() {
+  return useContext(HideVariableContext);
 }

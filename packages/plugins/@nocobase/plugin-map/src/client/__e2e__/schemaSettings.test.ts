@@ -12,7 +12,7 @@ import { oneMapUsedToTestSettings } from './templates';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/admin/settings/map');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await page.waitForTimeout(1000);
   if (await page.getByRole('button', { name: 'Edit' }).first().isVisible()) {
     await page.getByRole('button', { name: 'Edit' }).first().click();
@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
   await page.goto('/admin/settings/map');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await page.waitForTimeout(1000);
   await page.getByRole('button', { name: 'Edit' }).first().click();
   await page.getByLabel('Access key').clear();
@@ -56,7 +56,7 @@ test.describe('schema settings', () => {
         'The default zoom level of the map',
         'Set the data scope',
         'Connect data blocks',
-        'Save as template',
+        // 'Save as template',
         'Delete',
       ],
     });

@@ -16,12 +16,14 @@ export async function prepareApp(): Promise<MockServer> {
     plugins: [
       'acl',
       'error-handler',
+      'field-sort',
       'users',
       'ui-schema-storage',
       'data-source-main',
       'auth',
       'data-source-manager',
       'collection-tree',
+      'system-settings',
     ],
   });
 

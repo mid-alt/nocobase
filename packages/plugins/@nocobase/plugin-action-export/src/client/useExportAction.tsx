@@ -15,6 +15,8 @@ import {
   useCollectionManager_deprecated,
   useCompile,
   useCurrentAppInfo,
+  useTableBlockContext,
+  useDataBlockResource,
 } from '@nocobase/client';
 import lodash from 'lodash';
 import { saveAs } from 'file-saver';
@@ -23,7 +25,10 @@ import { useExportTranslation } from './locale';
 import { useMemo } from 'react';
 
 export const useExportAction = () => {
-  const { service, resource, props } = useBlockRequestContext();
+  const { service, props } = useBlockRequestContext();
+  const newResource = useDataBlockResource();
+  const { params } = useTableBlockContext();
+
   const appInfo = useCurrentAppInfo();
   const defaultFilter = props?.params.filter;
   const actionSchema = useFieldSchema();
@@ -32,7 +37,7 @@ export const useExportAction = () => {
   const { name, title } = useCollection_deprecated();
   const { t } = useExportTranslation();
   const { modal } = App.useApp();
-  const filters = service.params?.[1]?.filters || {};
+  const filters = service.params[0]?.filter || {};
   const field = useField();
   const exportLimit = useMemo(() => {
     if (appInfo?.data?.exportLimit) {
@@ -50,11 +55,14 @@ export const useExportAction = () => {
         content: t('Export warning', { limit: exportLimit }),
         okText: t('Start export'),
       });
+
       if (!confirmed) {
         return;
       }
+
       field.data.loading = true;
       const { exportSettings } = lodash.cloneDeep(actionSchema?.['x-action-settings'] ?? {});
+
       exportSettings.forEach((es) => {
         const { uiSchema, interface: fieldInterface } =
           getCollectionJoinField(`${name}.${es.dataIndex.join('.')}`) ?? {};
@@ -68,21 +76,22 @@ export const useExportAction = () => {
         }
         es.defaultTitle = uiSchema?.title;
       });
-      const { data } = await resource.export(
+
+      const { data } = await (newResource as any).export(
         {
           title: compile(title),
           appends: service.params[0]?.appends?.join(),
-          filter: mergeFilter([...Object.values(filters), defaultFilter]),
-          sort: service.params[0]?.sort,
-        },
-        {
-          method: 'post',
-          data: {
+          filter: mergeFilter([filters, defaultFilter]),
+          sort: params?.sort,
+          values: {
             columns: compile(exportSettings),
           },
+        },
+        {
           responseType: 'blob',
         },
       );
+
       const blob = new Blob([data], { type: 'application/x-xls' });
       field.data.loading = false;
       saveAs(blob, `${compile(title)}.xlsx`);

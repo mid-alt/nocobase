@@ -10,19 +10,26 @@
 import { ISchema, Schema } from '@formily/json-schema';
 import { useFieldSchema } from '@formily/react';
 import { uid } from '@formily/shared';
-import { Result } from 'antd';
 import _ from 'lodash';
 import { FC, default as React, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Location, useLocation } from 'react-router-dom';
 import { useAPIClient } from '../../../api-client';
+import { AppNotFound } from '../../../common/AppNotFound';
 import { DataBlockProvider } from '../../../data-source/data-block/DataBlockProvider';
-import { BlockRequestContext } from '../../../data-source/data-block/DataBlockRequestProvider';
+import { BlockRequestContextProvider } from '../../../data-source/data-block/DataBlockRequestProvider';
+import { useKeepAlive } from '../../../route-switch/antd/admin-layout/KeepAlive';
 import { SchemaComponent } from '../../core';
 import { TabsContextProvider } from '../tabs/context';
 import { usePopupSettings } from './PopupSettingsProvider';
 import { deleteRandomNestedSchemaKey, getRandomNestedSchemaKey } from './nestedSchemaKeyStorage';
-import { PopupParams, getPopupParamsFromPath, getStoredPopupContext, usePopupUtils } from './pagePopupUtils';
+import {
+  PopupParams,
+  getBlockService,
+  getPopupParamsFromPath,
+  getStoredPopupContext,
+  usePopupUtils,
+} from './pagePopupUtils';
+import { removePopupLayerState } from './popupState';
 import {
   PopupContext,
   getPopupContextFromActionOrAssociationFieldSchema,
@@ -41,7 +48,7 @@ export interface PopupProps {
    */
   hidden: boolean;
   /**
-   * Used to identify the level of the current popup, where 0 represents the first level.
+   * Used to identify the level of the current popup, where 1 represents the first level.
    */
   currentLevel: number;
   /**
@@ -66,13 +73,50 @@ AllPopupsPropsProviderContext.displayName = 'AllPopupsPropsProviderContext';
  * @param param0
  * @returns
  */
-export const PopupVisibleProvider: FC<PopupsVisibleProviderProps> = ({ children, visible, setVisible }) => {
+export const PopupVisibleProvider: FC<PopupsVisibleProviderProps> = React.memo(({ children, visible, setVisible }) => {
   const value = useMemo(() => {
     return { visible, setVisible };
   }, [visible, setVisible]);
 
   return <PopupVisibleProviderContext.Provider value={value}>{children}</PopupVisibleProviderContext.Provider>;
-};
+});
+
+PopupVisibleProvider.displayName = 'PopupVisibleProvider';
+
+const VisibleProvider: FC<{ popupuid: string }> = React.memo(({ children, popupuid }) => {
+  const { closePopup } = usePopupUtils();
+  const [visible, _setVisible] = useState(true);
+  const setVisible = useCallback(
+    (visible: boolean) => {
+      if (!visible) {
+        _setVisible(false);
+
+        if (process.env.__E2E__) {
+          setTimeout(() => {
+            closePopup();
+            // Deleting here ensures that the next time the same popup is opened, it will generate another random key.
+            deleteRandomNestedSchemaKey(popupuid);
+          });
+          return;
+        }
+
+        // Leave some time to refresh the block data
+        setTimeout(() => {
+          closePopup();
+          // Deleting here ensures that the next time the same popup is opened, it will generate another random key.
+          deleteRandomNestedSchemaKey(popupuid);
+        }, 300);
+      }
+    },
+    [closePopup, popupuid],
+  );
+
+  return (
+    <PopupVisibleProvider visible={visible} setVisible={setVisible}>
+      {children}
+    </PopupVisibleProvider>
+  );
+});
 
 const PopupParamsProvider: FC<Omit<PopupProps, 'hidden'>> = (props) => {
   const value = useMemo(() => {
@@ -107,73 +151,68 @@ const PopupTabsPropsProvider: FC = ({ children }) => {
   );
 };
 
+const displayNone = { display: 'none' };
 const PagePopupsItemProvider: FC<{
   params: PopupParams;
   context: PopupContext;
   /**
-   * Used to identify the level of the current popup, where 0 represents the first level.
+   * Used to identify the level of the current popup, where 1 represents the first level.
    */
   currentLevel: number;
 }> = ({ params, context, currentLevel, children }) => {
-  const { closePopup } = usePopupUtils();
-  const [visible, _setVisible] = useState(true);
-  const setVisible = (visible: boolean) => {
-    if (!visible) {
-      _setVisible(false);
-
-      if (process.env.__E2E__) {
-        setTimeout(() => {
-          closePopup();
-          // Deleting here ensures that the next time the same popup is opened, it will generate another random key.
-          deleteRandomNestedSchemaKey(params.popupuid);
-        });
-        return;
-      }
-
-      // Leave some time to refresh the block data
-      setTimeout(() => {
-        closePopup();
-        // Deleting here ensures that the next time the same popup is opened, it will generate another random key.
-        deleteRandomNestedSchemaKey(params.popupuid);
-      }, 300);
-    }
-  };
   const storedContext = { ...getStoredPopupContext(params.popupuid) };
 
+  useEffect(() => {
+    return () => {
+      removePopupLayerState(currentLevel);
+    };
+  }, [currentLevel]);
+
   if (!context) {
-    context = storedContext;
+    context = _.omitBy(
+      {
+        dataSource: storedContext.dataSource,
+        collection: storedContext.collection,
+        association: storedContext.association,
+      },
+      _.isNil,
+    ) as PopupContext;
   }
 
   if (_.isEmpty(context)) {
     return (
-      <PopupVisibleProvider visible={visible} setVisible={setVisible}>
-        <div style={{ display: 'none' }}>{children}</div>
-      </PopupVisibleProvider>
+      <PopupParamsProvider params={params} context={context} currentLevel={currentLevel}>
+        <PopupTabsPropsProvider>
+          <VisibleProvider popupuid={params.popupuid}>
+            <div style={displayNone}>{children}</div>
+          </VisibleProvider>
+        </PopupTabsPropsProvider>
+      </PopupParamsProvider>
     );
   }
 
   return (
     <PopupParamsProvider params={params} context={context} currentLevel={currentLevel}>
-      <PopupVisibleProvider visible={visible} setVisible={setVisible}>
-        <DataBlockProvider
-          dataSource={context.dataSource}
-          collection={params.collection || context.collection}
-          association={context.association}
-          sourceId={params.sourceid}
-          filterByTk={params.filterbytk}
-          // @ts-ignore
-          record={storedContext.record}
-          parentRecord={storedContext.parentRecord}
-          action="get"
-        >
-          {/* Pass the service of the block where the button is located down, to refresh the block's data when the popup is closed */}
-          <BlockRequestContext.Provider value={storedContext.service}>
-            <PopupTabsPropsProvider>
-              <div style={{ display: 'none' }}>{children}</div>
-            </PopupTabsPropsProvider>
-          </BlockRequestContext.Provider>
-        </DataBlockProvider>
-      </PopupVisibleProvider>
+      <DataBlockProvider
+        dataSource={context.dataSource}
+        collection={params.collection || context.collection}
+        association={context.association}
+        sourceId={params.sourceid}
+        filterByTk={parseQueryString(params.filterbytk)}
+        // @ts-ignore
+        record={storedContext.record}
+        parentRecord={storedContext.parentRecord}
+        action="get"
+      >
+        {/* Pass the service of the block where the button is located down, to refresh the block's data when the popup is closed */}
+        <BlockRequestContextProvider recordRequest={storedContext.service}>
+          <PopupTabsPropsProvider>
+            <VisibleProvider popupuid={params.popupuid}>
+              <div style={displayNone}>{children}</div>
+            </VisibleProvider>
+          </PopupTabsPropsProvider>
+        </BlockRequestContextProvider>
+      </DataBlockProvider>
     </PopupParamsProvider>
   );
 };
@@ -221,7 +260,7 @@ export const insertChildToParentSchema = ({
   }
 };
 
-export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
+const InternalPagePopups = (props: { paramsList?: PopupParams[] }) => {
   const fieldSchema = useFieldSchema();
   const location = useLocation();
   const popupParams = props.paramsList || getPopupParamsFromPath(getPopupPath(location));
@@ -240,25 +279,43 @@ export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
         );
       });
       const schemas = await Promise.all(waitList);
-      const clonedSchemas = schemas.map((schema, index) => {
-        if (_.isEmpty(schema)) {
-          return get404Schema();
-        }
-
-        const params = popupParams[index];
-
-        if (params.puid) {
-          const popupSchema = findSchemaByUid(params.puid, fieldSchema?.root);
-          if (popupSchema) {
-            savePopupSchemaToSchema(_.omit(popupSchema, 'parent'), schema);
+      const clonedSchemas = await Promise.all(
+        schemas.map(async (schema, index) => {
+          if (_.isEmpty(schema)) {
+            return get404Schema();
           }
-        }
 
-        const result = _.cloneDeep(_.omit(schema, 'parent')) as Schema;
-        result['x-read-pretty'] = true;
+          const params = popupParams[index];
 
-        return result;
-      });
+          if (params.puid) {
+            const popupSchema = findSchemaByUid(params.puid, fieldSchema?.root);
+            if (popupSchema) {
+              savePopupSchemaToSchema(_.omit(popupSchema, 'parent'), schema);
+            } else {
+              // 当本地找不到 popupSchema 时，通过接口请求 puid 对应的 schema
+              try {
+                const remoteSchema = await requestSchema(params.puid);
+                if (remoteSchema) {
+                  savePopupSchemaToSchema(remoteSchema, schema);
+                }
+              } catch (error) {
+                console.error('Failed to fetch schema for puid:', params.puid, error);
+              }
+            }
+          }
+
+          // Using toJSON for deep clone, faster than lodash's cloneDeep
+          const result = _.cloneDeepWith(_.omit(schema, 'parent'), (value) => {
+            // If we clone the Tabs component, it will cause the configuration to be lost when reopening the popup after modifying its settings
+            if (value?.['x-component'] === 'Tabs') {
+              return value;
+            }
+          });
+          result['x-read-pretty'] = true;
+
+          return result;
+        }),
+      );
       popupPropsRef.current = clonedSchemas.map((schema, index, items) => {
         const schemaContext = getPopupContextFromActionOrAssociationFieldSchema(schema);
         let hidden = false;
@@ -279,7 +336,9 @@ export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
           isSubPage: isSubPageSchema(schema),
         };
       });
+
       const rootSchema = clonedSchemas[0];
+
       for (let i = 1; i < clonedSchemas.length; i++) {
         insertChildToParentSchema({
           childSchema: clonedSchemas[i],
@@ -293,6 +352,7 @@ export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
           },
         });
       }
+
       setRootSchema(rootSchema);
     };
     run();
@@ -315,6 +375,16 @@ export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
       </PagePopupsItemProvider>
     </AllPopupsPropsProviderContext.Provider>
   );
+};
+
+export const PagePopups = (props: { paramsList?: PopupParams[] }) => {
+  const { active } = useKeepAlive();
+
+  if (!active) {
+    return null;
+  }
+
+  return <InternalPagePopups {...props} />;
 };
 
 export const useRequestSchema = () => {
@@ -353,7 +423,29 @@ function isSubPageSchema(schema: ISchema) {
 export const useCurrentPopupContext = (): PopupProps => {
   const { currentLevel } = React.useContext(PopupParamsProviderContext) || ({} as Omit<PopupProps, 'hidden'>);
   const allPopupsProps = React.useContext(AllPopupsPropsProviderContext);
-  return allPopupsProps?.[currentLevel - 1] || ({} as PopupProps);
+  const result = allPopupsProps?.[currentLevel - 1] || ({} as PopupProps);
+
+  if (result.context) {
+    Object.setPrototypeOf(result.context, {
+      get blockService() {
+        if (result?.params?.popupuid) {
+          return getBlockService(result.params.popupuid)?.service;
+        }
+        return null;
+      },
+    });
+  } else {
+    result.context = {
+      get blockService() {
+        if (result?.params?.popupuid) {
+          return getBlockService(result.params.popupuid)?.service;
+        }
+        return null;
+      },
+    };
+  }
+
+  return result;
 };
 
 /**
@@ -411,10 +503,7 @@ function get404Schema() {
                     version: '2.0',
                     type: 'void',
                     'x-component': function Com() {
-                      const { t } = useTranslation();
-                      return (
-                        <Result status="404" title="404" subTitle={t('Sorry, the page you visited does not exist.')} />
-                      );
+                      return <AppNotFound />;
                     },
                     'x-uid': uid(),
                     'x-async': false,
@@ -456,4 +545,26 @@ function findSchemaByUid(uid: string, rootSchema: Schema, resultRef: { value: Sc
     }
   });
   return resultRef.value;
+}
+
+function parseQueryString(queryString) {
+  // 如果没有 '&'，直接返回原始字符串
+  if (!queryString?.includes?.('=')) {
+    return queryString;
+  }
+
+  // 解码查询字符串
+  const decodedString = decodeURIComponent(queryString);
+
+  // 将解码后的字符串按 '&' 分隔成键值对
+  const pairs = decodedString.split('&');
+
+  // 将键值对转换为对象
+  const params = pairs.reduce((acc, pair) => {
+    const [key, value] = pair.split('=');
+    acc[key] = value;
+    return acc;
+  }, {});
+
+  return params;
 }

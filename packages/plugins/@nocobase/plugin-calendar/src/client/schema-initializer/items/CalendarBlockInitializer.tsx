@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { FormOutlined } from '@ant-design/icons';
+import { CalendarOutlined } from '@ant-design/icons';
 import { FormLayout } from '@formily/antd-v5';
 import { SchemaOptionsContext } from '@formily/react';
 import {
@@ -21,6 +21,8 @@ import {
   useGlobalTheme,
   useSchemaInitializer,
   useSchemaInitializerItem,
+  useApp,
+  useCompile,
 } from '@nocobase/client';
 import React, { useContext } from 'react';
 import { useTranslation } from '../../../locale';
@@ -46,7 +48,7 @@ export const CalendarBlockInitializer = ({
     <DataBlockInitializer
       {...itemConfig}
       componentType={`Calendar`}
-      icon={<FormOutlined />}
+      icon={<CalendarOutlined />}
       onCreateBlockSchema={async (options) => {
         if (createBlockSchema) {
           return createBlockSchema(options);
@@ -67,10 +69,20 @@ export const useCreateCalendarBlock = () => {
   const { getCollectionField, getCollectionFieldsOptions } = useCollectionManager_deprecated();
   const options = useContext(SchemaOptionsContext);
   const { theme } = useGlobalTheme();
+  const app = useApp();
+  const plugin = app.pm.get('calendar') as any;
+  const { titleFieldInterfaces, dateTimeFieldInterfaces } = plugin;
 
   const createCalendarBlock = async ({ item }) => {
-    const stringFieldsOptions = getCollectionFieldsOptions(item.name, 'string', { dataSource: item.dataSource });
-    const dateFieldsOptions = getCollectionFieldsOptions(item.name, 'date', {
+    const titleFieldsOptions = getCollectionFieldsOptions(
+      item.name,
+      null,
+      Object.keys(titleFieldInterfaces).map((v) => v || v),
+      {
+        dataSource: item.dataSource,
+      },
+    );
+    const dateFieldsOptions = getCollectionFieldsOptions(item.name, null, dateTimeFieldInterfaces, {
       association: ['o2o', 'obo', 'oho', 'm2o'],
       dataSource: item.dataSource,
     });
@@ -86,7 +98,7 @@ export const useCreateCalendarBlock = () => {
                   properties: {
                     title: {
                       title: t('Title field'),
-                      enum: stringFieldsOptions,
+                      enum: titleFieldsOptions,
                       required: true,
                       'x-component': 'Select',
                       'x-decorator': 'FormItem',

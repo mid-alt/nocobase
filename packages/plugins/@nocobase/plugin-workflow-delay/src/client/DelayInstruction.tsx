@@ -8,9 +8,10 @@
  */
 
 import React from 'react';
-import { InputNumber, Select } from 'antd';
-import { css, useCompile, usePlugin } from '@nocobase/client';
-import WorkflowPlugin, { Instruction, JOB_STATUS } from '@nocobase/plugin-workflow/client';
+import { Space } from 'antd';
+import { HourglassOutlined } from '@ant-design/icons';
+
+import { Instruction, JOB_STATUS, WorkflowVariableInput } from '@nocobase/plugin-workflow/client';
 
 import { NAMESPACE } from '../locale';
 
@@ -22,60 +23,48 @@ const UnitOptions = [
   { value: 604800_000, label: `{{t('Weeks', { ns: "workflow" })}}` },
 ];
 
-function getNumberOption(v) {
-  return UnitOptions.slice()
-    .reverse()
-    .find((item) => !(v % item.value));
-}
-
-function Duration({ value = 60000, onChange }) {
-  const compile = useCompile();
-  const option = getNumberOption(value);
-  const quantity = Math.round(value / option.value);
-
-  return (
-    <fieldset
-      className={css`
-        display: flex;
-        gap: 0.5em;
-      `}
-    >
-      <InputNumber
-        min={1}
-        value={quantity}
-        onChange={(v) => onChange(Math.round(v * option.value))}
-        className="auto-width"
-      />
-      <Select
-        // @ts-ignore
-        role="button"
-        data-testid="select-time-unit"
-        popupMatchSelectWidth={false}
-        value={option.value}
-        onChange={(unit) => onChange(Math.round(quantity * unit))}
-        className="auto-width"
-        options={UnitOptions.map((item) => ({
-          value: item.value,
-          label: compile(item.label),
-        }))}
-      />
-    </fieldset>
-  );
-}
-
 export default class extends Instruction {
   title = `{{t("Delay", { ns: "${NAMESPACE}" })}}`;
   type = 'delay';
   group = 'control';
   description = `{{t("Delay a period of time and then continue or exit the process. Can be used to set wait or timeout times in parallel branches.", { ns: "${NAMESPACE}" })}}`;
+  icon = (<HourglassOutlined style={{}} />);
   fieldset = {
     duration: {
-      type: 'number',
+      type: 'void',
       title: `{{t("Duration", { ns: "${NAMESPACE}" })}}`,
       'x-decorator': 'FormItem',
-      'x-component': 'Duration',
-      default: 60000,
+      'x-component': 'Space.Compact',
       required: true,
+      properties: {
+        unit: {
+          type: 'number',
+          'x-decorator': 'FormItem',
+          'x-component': 'Select',
+          'x-component-props': {
+            placeholder: `{{t("Unit", { ns: "${NAMESPACE}" })}}`,
+            className: 'auto-width',
+            allowClear: false,
+          },
+          enum: UnitOptions,
+          default: 60_000,
+        },
+        duration: {
+          type: 'number',
+          'x-decorator': 'FormItem',
+          'x-component': 'WorkflowVariableInput',
+          'x-component-props': {
+            placeholder: `{{t("Duration", { ns: "${NAMESPACE}" })}}`,
+            useTypedConstant: [['number', { min: 1 }]],
+            nullable: false,
+            parseOptions: {
+              defaultTypeOnNull: 'number',
+            },
+          },
+          default: 1,
+          required: true,
+        },
+      },
     },
     endStatus: {
       type: 'number',
@@ -91,7 +80,8 @@ export default class extends Instruction {
     },
   };
   components = {
-    Duration,
+    WorkflowVariableInput,
+    Space,
   };
   isAvailable({ engine, workflow, upstream, branchIndex }) {
     return !engine.isWorkflowSync(workflow);

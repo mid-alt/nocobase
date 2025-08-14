@@ -45,7 +45,7 @@ const collection = {
         type: 'string',
         'x-component': 'Select',
         required: true,
-        enum: '{{ storageTypes }}',
+        enum: '{{ storageTypeOptions }}',
       } as ISchema,
     },
     {
@@ -53,9 +53,9 @@ const collection = {
       name: 'baseUrl',
       interface: 'input',
       uiSchema: {
-        title: `{{t("Access base URL", { ns: "${NAMESPACE}" })}}`,
+        title: `{{t("Base URL", { ns: "${NAMESPACE}" })}}`,
         type: 'string',
-        'x-component': 'Input',
+        'x-component': 'TextAreaWithGlobalScope',
         required: true,
       } as ISchema,
     },
@@ -66,7 +66,7 @@ const collection = {
       uiSchema: {
         title: `{{t("Path", { ns: "${NAMESPACE}" })}}`,
         type: 'string',
-        'x-component': 'Input',
+        'x-component': 'TextAreaWithGlobalScope',
       } as ISchema,
     },
     {

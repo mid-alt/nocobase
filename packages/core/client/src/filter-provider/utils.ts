@@ -12,14 +12,10 @@ import { flatten, getValuesByPath } from '@nocobase/utils/client';
 import _ from 'lodash';
 import { useCallback, useEffect, useState } from 'react';
 import { FilterTarget, findFilterTargets } from '../block-provider/hooks';
-import {
-  CollectionFieldOptions_deprecated,
-  FieldOptions,
-  useCollectionManager_deprecated,
-  useCollection_deprecated,
-} from '../collection-manager';
+import { CollectionFieldOptions_deprecated, FieldOptions } from '../collection-manager';
 import { Collection } from '../data-source/collection/Collection';
 import { useCollection } from '../data-source/collection/CollectionProvider';
+import { useAllCollectionsInheritChainGetter } from '../data-source/data-source/DataSourceManagerProvider';
 import { removeNullCondition } from '../schema-component';
 import { DataBlock, useFilterBlock } from './FilterProvider';
 
@@ -53,9 +49,13 @@ export const getSupportFieldsByAssociation = (inheritCollectionsChain: string[],
 
 export const getSupportFieldsByForeignKey = (filterBlockCollection: Collection, block: DataBlock) => {
   return block.foreignKeyFields?.filter((foreignKeyField) => {
-    return filterBlockCollection.fields.some(
-      (field) => field.type !== 'belongsTo' && field.foreignKey === foreignKeyField.name,
-    );
+    return filterBlockCollection.fields.some((field) => {
+      return (
+        field.type !== 'belongsTo' &&
+        field.foreignKey === foreignKeyField.name && // 1. 外键字段的 name 要一致
+        field.target === foreignKeyField.collectionName // 2. 关系字段的目标表要和外键的数据表一致
+      );
+    });
   });
 };
 
@@ -68,7 +68,7 @@ export const useSupportedBlocks = (filterBlockType: FilterBlockType) => {
   const { getDataBlocks } = useFilterBlock();
   const fieldSchema = useFieldSchema();
   const collection = useCollection();
-  const { getAllCollectionsInheritChain } = useCollectionManager_deprecated();
+  const { getAllCollectionsInheritChain } = useAllCollectionsInheritChainGetter();
 
   // Form 和 Collapse 仅支持同表的数据区块
   if (filterBlockType === FilterBlockType.FORM || filterBlockType === FilterBlockType.COLLAPSE) {
@@ -120,6 +120,15 @@ export const transformToFilter = (
       }
 
       const collectionField = getCollectionJoinField(`${collectionName}.${path}`);
+
+      if (
+        ['datetime', 'datetimeNoTz', 'date', 'unixTimestamp', 'createdAt', 'updatedAt'].includes(
+          collectionField?.interface,
+        )
+      ) {
+        return true;
+      }
+
       if (collectionField?.target) {
         if (Array.isArray(value)) {
           return true;
@@ -139,7 +148,10 @@ export const transformToFilter = (
         let value = _.get(values, key);
         const collectionField = getCollectionJoinField(`${collectionName}.${key}`);
 
-        if (collectionField?.target) {
+        if (
+          collectionField?.target &&
+          ['hasOne', 'hasMany', 'belongsTo', 'belongsToMany', 'belongsToArray'].includes(collectionField.type)
+        ) {
           value = getValuesByPath(value, collectionField.targetKey || 'id');
           key = `${key}.${collectionField.targetKey || 'id'}`;
 
@@ -165,9 +177,7 @@ export const transformToFilter = (
 };
 
 export const useAssociatedFields = () => {
-  const { fields } = useCollection_deprecated();
-
-  return fields.filter((field) => isAssocField(field)) || [];
+  return useCollection()?.fields.filter((field) => isAssocField(field)) || [];
 };
 
 export const isAssocField = (field?: FieldOptions) => {
@@ -196,16 +206,21 @@ export const useFilterAPI = () => {
 
   const doFilter = useCallback(
     (
-      value,
-      field: string | ((target: FilterTarget['targets'][0]) => string) = 'id',
+      value: any | ((target: FilterTarget['targets'][0], block: DataBlock, sourceKey?: string) => any),
+      field: string | ((target: FilterTarget['targets'][0], block: DataBlock) => string) = 'id',
       operator: string | ((target: FilterTarget['targets'][0]) => string) = '$eq',
     ) => {
+      const currentBlock = dataBlocks.find((block) => block.uid === fieldSchema.parent['x-uid']);
       dataBlocks.forEach((block) => {
+        let key = field as string;
         const target = targets.find((target) => target.uid === block.uid);
         if (!target) return;
 
+        if (_.isFunction(value)) {
+          value = value(target, block, getSourceKey(currentBlock, target.field));
+        }
         if (_.isFunction(field)) {
-          field = field(target);
+          key = field(target, block);
         }
         if (_.isFunction(operator)) {
           operator = operator(target);
@@ -215,18 +230,22 @@ export const useFilterAPI = () => {
         // 保留原有的 filter
         const storedFilter = block.service.params?.[1]?.filters || {};
 
-        if (value !== undefined) {
+        if (value != null) {
           storedFilter[uid] = {
             $and: [
               {
-                [field]: {
+                [key]: {
                   [operator]: value,
                 },
               },
             ],
           };
         } else {
+          block.clearSelection?.();
           delete storedFilter[uid];
+          if (block.dataLoadingMode === 'manual') {
+            return block.clearData();
+          }
         }
 
         const mergedFilter = mergeFilter([
@@ -244,7 +263,7 @@ export const useFilterAPI = () => {
         );
       });
     },
-    [dataBlocks, targets, uid],
+    [dataBlocks, targets, uid, fieldSchema],
   );
 
   return {
@@ -264,3 +283,8 @@ export const isInFilterFormBlock = (fieldSchema: Schema) => {
   }
   return false;
 };
+
+function getSourceKey(currentBlock: DataBlock, field: string) {
+  const associationField = currentBlock?.associatedFields?.find((item) => item.foreignKey === field);
+  return associationField?.sourceKey || field?.split?.('.')?.[1];
+}

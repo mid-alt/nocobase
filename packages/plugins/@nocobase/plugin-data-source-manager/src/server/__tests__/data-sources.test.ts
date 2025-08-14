@@ -23,6 +23,86 @@ describe('data source', async () => {
     await app.destroy();
   });
 
+  it('should return datasource status when datasource is loading or reloading', async () => {
+    class MockDataSource extends DataSource {
+      static testConnection(options?: any): Promise<boolean> {
+        return Promise.resolve(true);
+      }
+
+      async load(): Promise<void> {
+        await waitSecond(1000);
+      }
+
+      createCollectionManager(options?: any): any {
+        return undefined;
+      }
+    }
+
+    app.dataSourceManager.factory.register('mock', MockDataSource);
+
+    app.dataSourceManager.beforeAddDataSource(async (dataSource: DataSource) => {
+      const total = 1000;
+      for (let i = 0; i < total; i++) {
+        dataSource.emitLoadingProgress({
+          total,
+          loaded: i,
+        });
+      }
+    });
+
+    await app.db.getRepository('dataSources').create({
+      values: {
+        key: 'mockInstance1',
+        type: 'mock',
+        displayName: 'Mock',
+        options: {},
+      },
+    });
+
+    await waitSecond(200);
+
+    // get data source status
+    const plugin: any = app.pm.get('data-source-manager');
+    expect(plugin.dataSourceStatus['mockInstance1']).toBe('loading');
+
+    const loadingStatus = plugin.dataSourceLoadingProgress['mockInstance1'];
+    expect(loadingStatus).toBeDefined();
+  });
+
+  it('should get error when datasource loading failed', async () => {
+    class MockDataSource extends DataSource {
+      static testConnection(options?: any): Promise<boolean> {
+        return Promise.resolve(true);
+      }
+
+      async load(): Promise<void> {
+        throw new Error(`load failed`);
+      }
+
+      createCollectionManager(options?: any): any {
+        return undefined;
+      }
+    }
+
+    app.dataSourceManager.factory.register('mock', MockDataSource);
+
+    await app.db.getRepository('dataSources').create({
+      values: {
+        key: 'mockInstance1',
+        type: 'mock',
+        displayName: 'Mock',
+        options: {},
+      },
+    });
+
+    await waitSecond(2000);
+    // get data source status
+    const plugin: any = app.pm.get('data-source-manager');
+    expect(plugin.dataSourceStatus['mockInstance1']).toBe('loading-failed');
+
+    expect(plugin.dataSourceErrors['mockInstance1'].message).toBe('load failed');
+  });
+
   it('should list main datasource in api', async () => {
     const listResp = await app.agent().resource('dataSources').list();
     expect(listResp.status).toBe(200);
@@ -612,6 +692,47 @@ describe('data source', async () => {
       const dataSource2 = app.dataSourceManager.dataSources.get('mockInstance1');
       const collection2 = dataSource2.collectionManager.getCollection('comments');
       expect(collection2.getField('post')).toBeFalsy();
+    });
+
+    it(`should not return possibleTypes field when creating field`, async () => {
+      const createResp = await app
+        .agent()
+        .resource('dataSourcesCollections.fields', 'mockInstance1.comments')
+        .create({
+          values: {
+            type: 'string',
+            name: 'title',
+            possibleTypes: ['123', '456'],
+          },
+        });
+
+      expect(createResp.status).toBe(200);
+      const data = createResp.body.data;
+      expect(data.possibleTypes).not.exist;
+
+      const fieldModel = await app.db.getRepository('dataSourcesFields').findOne({
+        filter: {
+          dataSourceKey: 'mockInstance1',
+        },
+      });
+      expect(fieldModel.get('options').possibleTypes).not.exist;
+    });
+
+    it(`should not return possibleTypes field when update field`, async () => {
+      const fieldUpdateResp = await app
+        .agent()
+        .resource('dataSourcesCollections.fields', 'mockInstance1.posts')
+        .update({
+          filterByTk: 'title',
+          values: {
+            title: '标题 Field',
+            possibleTypes: ['123', '456'],
+          },
+        });
+
+      expect(fieldUpdateResp.status).toBe(200);
+      const data = fieldUpdateResp.body.data;
+      expect(data.possibleTypes).not.exist;
     });
   });
 });

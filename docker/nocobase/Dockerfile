@@ -1,18 +1,24 @@
-FROM node:18-bullseye-slim as builder
+FROM node:20-bookworm-slim as builder
+
+ARG CNA_VERSION
 
 WORKDIR /app
 
 RUN cd /app \
   && yarn config set network-timeout 600000 -g \
-  && yarn create nocobase-app my-nocobase-app -a -e APP_ENV=production \
+  && npx -y create-nocobase-app@${CNA_VERSION} my-nocobase-app --skip-dev-dependencies -a -e APP_ENV=production \
   && cd /app/my-nocobase-app \
-  && yarn install --production
+  && yarn install --production \
+  && rm -rf yarn.lock \
+  && find node_modules -type f -name "yarn.lock" -delete \
+  && find node_modules -type f -name "bower.json" -delete \
+  && find node_modules -type f -name "composer.json" -delete
 
 RUN cd /app \
   && rm -rf nocobase.tar.gz \
   && tar -zcf ./nocobase.tar.gz -C /app/my-nocobase-app .
 
-FROM node:18-bullseye-slim
+FROM node:20-bookworm-slim
 
 # COPY ./sources.list /etc/apt/sources.list
 RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \

@@ -42,23 +42,29 @@ function getRepeatTypeValue(v) {
   return 'none';
 }
 
-function CommonRepeatField({ value, onChange }) {
+function CommonRepeatField({ value, onChange, disabled }) {
   const { t } = useWorkflowTranslation();
   const option = getNumberOption(value);
 
   return (
     <InputNumber
       value={value / option.value}
-      onChange={(v) => onChange(v * option.value)}
+      onChange={(v) => {
+        if (!v) {
+          return;
+        }
+        onChange(v * option.value);
+      }}
       min={1}
       addonBefore={t('Every')}
       addonAfter={t(option.unitText)}
       className="auto-width"
+      disabled={disabled}
     />
   );
 }
 
-export function RepeatField({ value = null, onChange }) {
+export function RepeatField({ value = null, onChange, disabled }) {
   const { t } = useWorkflowTranslation();
   const typeValue = getRepeatTypeValue(value);
   const onTypeChange = useCallback(
@@ -71,9 +77,9 @@ export function RepeatField({ value = null, onChange }) {
         onChange('0 * * * * *');
         return;
       }
-      onChange(v);
+      onChange(typeof typeValue === 'number' ? Math.round((value / typeValue) * v) : v);
     },
-    [onChange],
+    [onChange, typeValue, value],
   );
 
   return (
@@ -109,20 +115,23 @@ export function RepeatField({ value = null, onChange }) {
         }
       `}
     >
-      <Select value={typeValue} onChange={onTypeChange} className="auto-width">
+      <Select value={typeValue} onChange={onTypeChange} className="auto-width" disabled={disabled}>
         {RepeatOptions.map((item) => (
           <Select.Option key={item.value} value={item.value}>
             {t(item.text)}
           </Select.Option>
         ))}
       </Select>
-      {typeof typeValue === 'number' ? <CommonRepeatField value={value} onChange={onChange} /> : null}
+      {typeof typeValue === 'number' ? (
+        <CommonRepeatField value={value} onChange={onChange} disabled={disabled} />
+      ) : null}
       {typeValue === 'cron' ? (
         <Cron
           value={value.trim().split(/\s+/).slice(1).join(' ')}
           setValue={(v) => onChange(`0 ${v}`)}
           clearButton={false}
           locale={window['cronLocale']}
+          disabled={disabled}
         />
       ) : null}
     </fieldset>

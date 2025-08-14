@@ -71,11 +71,11 @@ test.describe('Configuration page disable enable', () => {
     // 3、预期结果：触发次数为1
     let getWorkflow = await apiGetWorkflow(workflowId);
     let getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    let getWorkflowExecuted = getWorkflowObj.executed;
+    let getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(0);
 
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByRole('switch', { name: 'On Off' }).click();
 
     await apiCreateRecordTriggerFormEvent(triggerNodeCollectionName, triggerWorkflows, {
@@ -85,7 +85,7 @@ test.describe('Configuration page disable enable', () => {
 
     getWorkflow = await apiGetWorkflow(workflowId);
     getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    getWorkflowExecuted = getWorkflowObj.executed;
+    getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     // 4、后置处理：删除工作流
@@ -142,11 +142,11 @@ test.describe('Configuration page disable enable', () => {
     // 3、预期结果：触发次数为1
     let getWorkflow = await apiGetWorkflow(workflowId);
     let getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    let getWorkflowExecuted = getWorkflowObj.executed;
+    let getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByRole('switch', { name: 'On Off' }).click();
 
     await apiCreateRecordTriggerFormEvent(triggerNodeCollectionName, triggerWorkflows, {
@@ -156,7 +156,7 @@ test.describe('Configuration page disable enable', () => {
 
     getWorkflow = await apiGetWorkflow(workflowId);
     getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    getWorkflowExecuted = getWorkflowObj.executed;
+    getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     // 4、后置处理：删除工作流

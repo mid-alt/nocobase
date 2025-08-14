@@ -96,7 +96,8 @@ export default {
       if (!filterByTk) {
         ctx.throw(400, 'plugin name invalid');
       }
-      app.runAsCLI(['pm', 'enable', filterByTk], { from: 'user' });
+      const keys = Array.isArray(filterByTk) ? filterByTk : [filterByTk];
+      app.runAsCLI(['pm', 'enable', ...keys], { from: 'user' });
       ctx.body = filterByTk;
       await next();
     },
@@ -123,7 +124,9 @@ export default {
     async list(ctx, next) {
       const locale = ctx.getCurrentLocale();
       const pm = ctx.app.pm as PluginManager;
-      ctx.body = await pm.list({ locale, isPreset: false });
+      // ctx.body = await pm.list({ locale, isPreset: false });
+      const plugin = pm.get('nocobase') as any;
+      ctx.body = await plugin.getAllPlugins(locale);
       await next();
     },
     async listEnabled(ctx, next) {
@@ -139,7 +142,14 @@ export default {
         const pkgPath = path.resolve(process.env.NODE_MODULES_PATH, item.packageName);
         const r = await fse.exists(pkgPath);
         if (r) {
-          const url = `${process.env.APP_SERVER_BASE_URL}${process.env.PLUGIN_STATICS_PATH}${item.packageName}/${PLUGIN_CLIENT_ENTRY_FILE}?version=${item.version}`;
+          let t = '';
+          const dist = path.resolve(pkgPath, PLUGIN_CLIENT_ENTRY_FILE);
+          const distExists = await fse.exists(dist);
+          if (distExists) {
+            const fsState = await fse.stat(distExists ? dist : pkgPath);
+            t = `&t=${fsState.mtime.getTime()}`;
+          }
+          const url = `${process.env.APP_SERVER_BASE_URL}${process.env.PLUGIN_STATICS_PATH}${item.packageName}/${PLUGIN_CLIENT_ENTRY_FILE}?version=${item.version}${t}`;
           arr.push({
             ...item.toJSON(),
             url,
@@ -156,7 +166,9 @@ export default {
       if (!filterByTk) {
         ctx.throw(400, 'plugin name invalid');
       }
-      ctx.body = await pm.get(filterByTk).toJSON({ locale });
+      const plugin = pm.get('nocobase') as any;
+      ctx.body = await plugin.getPluginInfo(filterByTk, locale);
+      // ctx.body = await pm.get(filterByTk).toJSON({ locale });
       await next();
     },
   },

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { SchemaSettings } from '../../../../application/schema-settings/SchemaSettings';
 import { useCollectionManager_deprecated, useSortFields } from '../../../../collection-manager';
 import { useFieldComponentName } from '../../../../common/useFieldComponentName';
-import { useCollectionManager, useRerenderDataBlock } from '../../../../data-source';
+import { useCollectionManager, useRerenderDataBlock, useCollectionField } from '../../../../data-source';
 import { FlagProvider } from '../../../../flag-provider/FlagProvider';
 import { withDynamicSchemaProps } from '../../../../hoc/withDynamicSchemaProps';
 import {
@@ -28,7 +28,34 @@ import { isSubMode } from '../../../../schema-component/antd/association-field/u
 import { useIsAssociationField } from '../../../../schema-component/antd/form-item';
 import { FormLinkageRules } from '../../../../schema-settings/LinkageRules';
 import { SchemaSettingsLinkageRules } from '../../../../schema-settings/SchemaSettings';
+import { useColumnSchema } from '../../../../schema-component';
+import { SchemaSettingsItemType } from '../../../../application';
 
+const enabledIndexColumn: SchemaSettingsItemType = {
+  name: 'enableIndexColumn',
+  type: 'switch',
+  useComponentProps: () => {
+    const field = useField();
+    const fieldSchema = useFieldSchema();
+    const { t } = useTranslation();
+    const { dn } = useDesignable();
+    return {
+      title: t('Enable index column'),
+      checked: field.componentProps.enableIndexColumn !== false,
+      onChange: async (enableIndexColumn) => {
+        field.componentProps = field.componentProps || {};
+        field.componentProps.enableIndexColumn = enableIndexColumn;
+        fieldSchema['x-component-props'].enableIndexColumn = enableIndexColumn;
+        dn.emit('patch', {
+          schema: {
+            ['x-uid']: fieldSchema['x-uid'],
+            'x-component-props': fieldSchema['x-component-props'],
+          },
+        });
+      },
+    };
+  },
+};
 const fieldComponent: any = {
   name: 'fieldComponent',
   type: 'select',
@@ -72,12 +99,15 @@ const fieldComponent: any = {
     };
   },
 };
-const allowSelectExistingRecord = {
+export const allowSelectExistingRecord = {
   name: 'allowSelectExistingRecord',
   type: 'switch',
   useVisible() {
+    const fieldSchema = useFieldSchema();
+    const { multiple } = fieldSchema['x-component-props'];
     const readPretty = useIsFieldReadPretty();
-    return !readPretty;
+    const collectionField = useCollectionField();
+    return !readPretty && multiple !== false && ['hasMany', 'belongsToMany'].includes(collectionField?.type);
   },
   useComponentProps() {
     const { t } = useTranslation();
@@ -94,6 +124,38 @@ const allowSelectExistingRecord = {
         field.componentProps.allowSelectExistingRecord = value;
         fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
         fieldSchema['x-component-props'].allowSelectExistingRecord = value;
+        schema['x-component-props'] = fieldSchema['x-component-props'];
+        dn.emit('patch', {
+          schema,
+        });
+        refresh();
+      },
+    };
+  },
+};
+
+const allowDisassociation = {
+  name: 'allowDisassociation',
+  type: 'switch',
+  useVisible() {
+    const readPretty = useIsFieldReadPretty();
+    return !readPretty;
+  },
+  useComponentProps() {
+    const { t } = useTranslation();
+    const field = useField<Field>();
+    const fieldSchema = useFieldSchema();
+    const { dn, refresh } = useDesignable();
+    return {
+      title: t('Allow disassociation'),
+      checked: fieldSchema['x-component-props']?.allowDisassociation !== false,
+      onChange(value) {
+        const schema = {
+          ['x-uid']: fieldSchema['x-uid'],
+        };
+        field.componentProps.allowDisassociation = value;
+        fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
+        fieldSchema['x-component-props'].allowDisassociation = value;
         schema['x-component-props'] = fieldSchema['x-component-props'];
         dn.emit('patch', {
           schema,
@@ -277,11 +339,12 @@ export const linkageRules = {
   Component: SchemaSettingsLinkageRules,
   useComponentProps() {
     const field = useField();
-    const fieldSchema = useFieldSchema();
+    const schema = useFieldSchema();
+    const { fieldSchema: columnSchema } = useColumnSchema();
+    const fieldSchema = columnSchema || schema;
     const cm = useCollectionManager();
     const collectionField = cm.getCollectionField(fieldSchema['x-collection-field']);
     const { rerenderDataBlock } = useRerenderDataBlock();
-
     return {
       collectionName: collectionField?.target,
       Component: LinkageRulesComponent,
@@ -291,7 +354,47 @@ export const linkageRules = {
   },
 };
 
+export const recordPerPage = {
+  name: 'recordsPerPage',
+  type: 'select',
+  useComponentProps() {
+    const { t } = useTranslation();
+    const fieldSchema = useFieldSchema();
+    const field = useField();
+    const { dn } = useDesignable();
+    const pageSizeOptions = [10, 20, 50, 100];
+
+    return {
+      title: t('Records per page'),
+      value: field.componentProps?.pageSize || 10,
+      options: pageSizeOptions.map((v) => ({ value: v })),
+      onChange: (pageSize) => {
+        const schema = {
+          ['x-uid']: fieldSchema['x-uid'],
+        };
+        field.componentProps = field.componentProps || {};
+        field.componentProps.pageSize = pageSize;
+        fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
+        fieldSchema['x-component-props'].pageSize = pageSize;
+        schema['x-component-props'] = fieldSchema['x-component-props'];
+        dn.emit('patch', {
+          schema,
+        });
+      },
+    };
+  },
+};
+
 export const subTablePopoverComponentFieldSettings = new SchemaSettings({
   name: 'fieldSettings:component:SubTable',
-  items: [fieldComponent, allowAddNewData, allowSelectExistingRecord, setDefaultSortingRules, linkageRules],
+  items: [
+    fieldComponent,
+    allowAddNewData,
+    allowSelectExistingRecord,
+    allowDisassociation,
+    setDefaultSortingRules,
+    enabledIndexColumn,
+    linkageRules,
+    recordPerPage,
+  ],
 });

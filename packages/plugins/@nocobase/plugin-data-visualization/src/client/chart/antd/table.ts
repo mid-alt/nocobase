@@ -13,7 +13,7 @@ import { Table as AntdTable } from 'antd';
 
 export class Table extends AntdChart {
   constructor() {
-    super({ name: 'table', title: 'Table', Component: AntdTable });
+    super({ name: 'table', title: 'Table', enableAdvancedConfig: true, Component: AntdTable });
   }
 
   getProps({ data, fieldProps, general, advanced }: RenderProps) {
@@ -41,17 +41,11 @@ export class Table extends AntdChart {
       item._key = index;
       return item;
     });
-    const pageSize = advanced?.pagination?.pageSize || 10;
     return {
       // bordered: true,
       size: 'middle',
-      pagination:
-        dataSource.length < pageSize
-          ? false
-          : {
-              pageSize,
-            },
       dataSource,
+      ...(dataSource.length < 10 ? { pagination: false } : {}),
       columns,
       scroll: {
         x: 'max-content',

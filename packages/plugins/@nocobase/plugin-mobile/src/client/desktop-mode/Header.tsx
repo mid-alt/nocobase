@@ -95,11 +95,11 @@ export const DesktopModeHeader: FC = () => {
         }
       `}
     >
-      <Button style={{ color: 'white' }} href={app.getRouteUrl('/admin')}>
+      <Button style={{ color: 'white' }} href={app.getHref('/admin')}>
         {t('Back')}
       </Button>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        {allowConfigUI ? <DesignableSwitch /> : null}
+      <div style={{ display: 'flex', alignItems: 'center', lineHeight: 1 }}>
+        {allowConfigUI ? <DesignableSwitch style={{ fontSize: 16 }} /> : null}
         <Button
           onClick={() => {
             setSize({ width: 768, height: 667 });

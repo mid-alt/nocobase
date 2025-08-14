@@ -11,7 +11,6 @@ import { Context, utils as actionUtils } from '@nocobase/actions';
 import { Cache } from '@nocobase/cache';
 import { Collection, RelationField, Transaction } from '@nocobase/database';
 import { Plugin } from '@nocobase/server';
-import { Mutex } from 'async-mutex';
 import lodash from 'lodash';
 import { resolve } from 'path';
 import { availableActionResource } from './actions/available-actions';
@@ -23,6 +22,7 @@ import { createWithACLMetaMiddleware } from './middlewares/with-acl-meta';
 import { RoleModel } from './model/RoleModel';
 import { RoleResourceActionModel } from './model/RoleResourceActionModel';
 import { RoleResourceModel } from './model/RoleResourceModel';
+import { setSystemRoleMode } from './actions/union-role';
 
 export class PluginACLServer extends Plugin {
   get acl() {
@@ -44,6 +44,26 @@ export class PluginACLServer extends Plugin {
       role,
       resourceName: resource.get('name') as string,
     });
+  }
+
+  async handleSyncMessage(message) {
+    const { type } = message;
+    if (type === 'syncRole') {
+      const { roleName } = message;
+      const role = await this.app.db.getRepository('roles').findOne({
+        filter: {
+          name: roleName,
+        },
+      });
+
+      await this.writeRoleToACL(role, {
+        withOutResources: true,
+      });
+
+      await this.app.emitAsync('acl:writeResources', {
+        roleName: role.get('name'),
+      });
+    }
   }
 
   async writeRolesToACL(options) {
@@ -144,6 +164,8 @@ export class PluginACLServer extends Plugin {
     this.app.resourcer.define(availableActionResource);
     this.app.resourcer.define(roleCollectionsResource);
 
+    this.app.resourcer.registerActionHandler('roles:setSystemRoleMode', setSystemRoleMode);
+
     this.app.resourcer.registerActionHandler('roles:check', checkAction);
 
     this.app.resourcer.registerActionHandler(`users:setDefaultRole`, setDefaultRole);
@@ -214,6 +236,16 @@ export class PluginACLServer extends Plugin {
           transaction,
         });
       }
+
+      this.sendSyncMessage(
+        {
+          type: 'syncRole',
+          roleName: model.get('name'),
+        },
+        {
+          transaction: options.transaction,
+        },
+      );
     });
 
     this.app.db.on('roles.afterDestroy', (model) => {
@@ -275,10 +307,9 @@ export class PluginACLServer extends Plugin {
       }
     });
 
-    const mutex = new Mutex();
-
     this.app.db.on('fields.afterDestroy', async (model, options) => {
-      await mutex.runExclusive(async () => {
+      const lockKey = `${this.name}:fields.afterDestroy:${model.get('collectionName')}:${model.get('name')}`;
+      await this.app.lockManager.runExclusive(lockKey, async () => {
         const collectionName = model.get('collectionName');
         const fieldName = model.get('name');
 
@@ -310,10 +341,16 @@ export class PluginACLServer extends Plugin {
     this.app.db.on('rolesUsers.afterSave', async (model) => {
       const cache = this.app.cache as Cache;
       await cache.del(`roles:${model.get('userId')}`);
+      await cache.del(`roles:${model.get('userId')}:defaultRole`);
+    });
+    this.app.db.on('systemSettings.afterSave', async (model) => {
+      const cache = this.app.cache as Cache;
+      await cache.del(`app:systemSettings`);
     });
     this.app.db.on('rolesUsers.afterDestroy', async (model) => {
       const cache = this.app.cache as Cache;
       await cache.del(`roles:${model.get('userId')}`);
+      await cache.del(`roles:${model.get('userId')}:defaultRole`);
     });
 
     const writeRolesToACL = async (app, options) => {
@@ -408,7 +445,7 @@ export class PluginACLServer extends Plugin {
       });
     });
 
-    this.app.on('beforeSignOut', ({ userId }) => {
+    this.app.on('cache:del:roles', ({ userId }) => {
       this.app.cache.del(`roles:${userId}`);
     });
     this.app.resourcer.use(setCurrentRole, { tag: 'setCurrentRole', before: 'acl', after: 'auth' });
@@ -417,7 +454,7 @@ export class PluginACLServer extends Plugin {
     this.app.acl.allow('roles', 'check', 'loggedIn');
 
     this.app.acl.allow('*', '*', (ctx) => {
-      return ctx.state.currentRole === 'root';
+      return ctx.state.currentRoles?.includes('root');
     });
 
     this.app.acl.addFixedParams('collections', 'destroy', () => {
@@ -452,7 +489,7 @@ export class PluginACLServer extends Plugin {
       };
     });
 
-    this.app.resourcer.use(async (ctx, next) => {
+    this.app.resourceManager.use(async function showAnonymous(ctx, next) {
       const { actionName, resourceName, params } = ctx.action;
       const { showAnonymous } = params || {};
       if (actionName === 'list' && resourceName === 'roles') {
@@ -547,7 +584,7 @@ export class PluginACLServer extends Plugin {
 
           const hasFilterByTk = (params) => {
             return JSON.stringify(params).includes('filterByTk');
-          }
+          };
 
           if (!hasFilterByTk(ctx.permission.mergedParams) || !hasFilterByTk(ctx.permission.rawParams)) {
             await next();
@@ -574,12 +611,11 @@ export class PluginACLServer extends Plugin {
       },
     );
 
-
     const withACLMeta = createWithACLMetaMiddleware();
 
     // append allowedActions to list & get response
     this.app.use(
-      async (ctx, next) => {
+      async function withACLMetaMiddleware(ctx, next) {
         try {
           await withACLMeta(ctx, next);
         } catch (error) {

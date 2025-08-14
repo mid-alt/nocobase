@@ -6,13 +6,11 @@
  * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
-
 import { useSchemaToolbar } from '../../../application';
 import { SchemaSettings } from '../../../application/schema-settings/SchemaSettings';
-import { useCollection_deprecated } from '../../../collection-manager';
 import { ButtonEditor, RemoveButton } from '../../../schema-component/antd/action/Action.Designer';
 import { SchemaSettingOpenModeSchemaItems } from '../../../schema-items';
-import { SchemaSettingsLinkageRules } from '../../../schema-settings';
+import { SchemaSettingsLinkageRules, SchemaSettingAccessControl } from '../../../schema-settings';
 import { useOpenModeContext } from '../../popup/OpenModeProvider';
 
 export const customizePopupActionSettings = new SchemaSettings({
@@ -30,11 +28,9 @@ export const customizePopupActionSettings = new SchemaSettings({
       name: 'linkageRules',
       Component: SchemaSettingsLinkageRules,
       useComponentProps() {
-        const { name } = useCollection_deprecated();
         const { linkageRulesProps } = useSchemaToolbar();
         return {
           ...linkageRulesProps,
-          collectionName: name,
         };
       },
     },
@@ -49,6 +45,7 @@ export const customizePopupActionSettings = new SchemaSettings({
         };
       },
     },
+    SchemaSettingAccessControl,
     {
       name: 'remove',
       sort: 100,

@@ -88,11 +88,12 @@ test('Collection event add data trigger, determine trigger node integer variable
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('branch').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByText('Branch into "Yes" and "No"').click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionBranchNode(page, conditionNodeName);
@@ -151,7 +152,7 @@ test('Collection event add data trigger, determine trigger node integer variable
   // 3、预期结果：工作流成功触发,判断节点true
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -236,11 +237,12 @@ test('Collection event add data trigger, determine trigger node integer variable
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('branch').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByText('Branch into "Yes" and "No"').click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionBranchNode(page, conditionNodeName);
@@ -296,7 +298,7 @@ test('Collection event add data trigger, determine trigger node integer variable
   // 3、预期结果：工作流成功触发,判断节点false
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -380,11 +382,12 @@ test('Collection event add data trigger, determine trigger node integer variable
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('branch').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByText('Branch into "Yes" and "No"').click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionBranchNode(page, conditionNodeName);
@@ -442,7 +445,7 @@ test('Collection event add data trigger, determine trigger node integer variable
   // 3、预期结果：工作流成功触发,判断节点false
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -526,11 +529,12 @@ test('Collection event add data trigger, determine trigger node integer variable
 
   //配置判断节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
-  await page.getByRole('button', { name: 'condition', exact: true }).hover();
-  await page.getByLabel('branch').click();
+  await page.getByRole('button', { name: 'condition', exact: true }).click();
+  await page.getByText('Branch into "Yes" and "No"').click();
+  await page.getByLabel('action-Action-Submit-workflows').click();
   const conditionNodeName = 'condition' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
   await page.getByLabel('Condition-Condition', { exact: true }).getByRole('textbox').fill(conditionNodeName);
   const conditionNode = new ConditionBranchNode(page, conditionNodeName);
@@ -588,7 +592,7 @@ test('Collection event add data trigger, determine trigger node integer variable
   // 3、预期结果：工作流成功触发,判断节点true
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));

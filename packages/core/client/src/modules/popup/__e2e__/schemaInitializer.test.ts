@@ -19,7 +19,7 @@ test.describe('add blocks to the popup', () => {
 
     // 点击 Details -> Current record 选项创建详情区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Details' }).hover();
+    await page.getByRole('menuitem', { name: 'Details' }).hover();
     await page.getByRole('menuitem', { name: 'Current record' }).click();
     await page.getByLabel('schema-initializer-Grid-details:configureFields-roles').hover();
     await page.getByRole('menuitem', { name: 'Role UID' }).click();
@@ -45,7 +45,7 @@ test.describe('add blocks to the popup', () => {
 
     // 通过点击 Current record 选项创建详情区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Details right' }).hover();
+    await page.getByRole('menuitem', { name: 'Details right' }).hover();
     await page.getByRole('menuitem', { name: 'Current record' }).click();
     await page.getByLabel('schema-initializer-Grid-details:configureFields-users').hover();
     await page.getByRole('menuitem', { name: 'Nickname' }).click();
@@ -54,9 +54,10 @@ test.describe('add blocks to the popup', () => {
 
     // 通过 Association records 创建一个关系区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Details right' }).hover();
-    await page.getByRole('menuitem', { name: 'Associated records' }).hover();
+    await page.getByRole('menuitem', { name: 'Details right' }).hover();
+    await page.getByRole('menuitem', { name: 'Associated records' }).last().hover();
     await page.getByRole('menuitem', { name: 'Roles' }).click();
+    await page.mouse.move(300, 0);
     await page.getByLabel('schema-initializer-Grid-details:configureFields-roles').hover();
     await page.getByRole('menuitem', { name: 'Role UID' }).click();
     await page.mouse.move(300, 0);
@@ -73,7 +74,7 @@ test.describe('add blocks to the popup', () => {
 
     // 通过 Current record 创建详情区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Details right' }).hover();
+    await page.getByRole('menuitem', { name: 'Details right' }).hover();
     await page.getByRole('menuitem', { name: 'Current record right' }).hover();
     await page.getByRole('menuitem', { name: 'father' }).click();
     await page.mouse.move(-300, 0);
@@ -86,8 +87,8 @@ test.describe('add blocks to the popup', () => {
 
     // 通过 Association records 创建关系区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Table right' }).hover();
-    await page.getByRole('menuitem', { name: 'Associated records' }).hover();
+    await page.getByRole('menuitem', { name: 'Table right' }).hover();
+    await page.getByRole('menuitem', { name: 'Associated records' }).last().hover();
     await page.getByRole('menuitem', { name: 'manyToMany' }).click();
     await page.mouse.move(-300, 0);
     await page
@@ -115,7 +116,7 @@ test.describe('add blocks to the popup', () => {
 
     // 通过 Current record 创建详情区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Details right' }).hover();
+    await page.getByRole('menuitem', { name: 'Details right' }).hover();
     await page.getByRole('menuitem', { name: 'Current record right' }).hover();
     await page.getByRole('menuitem', { name: 'father' }).click();
     await page.getByLabel('schema-initializer-Grid-details:configureFields-father').hover();
@@ -134,8 +135,8 @@ test.describe('add blocks to the popup', () => {
 
     // 通过 Association records 创建一个关系区块
     await page.getByLabel('schema-initializer-Grid-popup').hover();
-    await page.getByRole('menuitem', { name: 'table Table right' }).hover();
-    await page.getByRole('menuitem', { name: 'Associated records' }).hover();
+    await page.getByRole('menuitem', { name: 'Table right' }).hover();
+    await page.getByRole('menuitem', { name: 'Associated records' }).last().hover();
     await page.getByRole('menuitem', { name: 'Roles' }).click();
     await page
       .getByTestId('drawer-Action.Container-users-View record')

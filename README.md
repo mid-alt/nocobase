@@ -1,32 +1,15 @@
 English | [中文](./README.zh-CN.md) | [日本語](./README.ja-JP.md)
 
-https://github.com/nocobase/nocobase/assets/1267426/1d6a3979-d1eb-4e50-b726-2f90c3f82eeb
+https://github.com/user-attachments/assets/a50c100a-4561-4e06-b2d2-d48098659ec0
 
-## We'd love your support!
-
+<p align="center">
 <a href="https://trendshift.io/repositories/4112" target="_blank"><img src="https://trendshift.io/api/badge/repositories/4112" alt="nocobase%2Fnocobase | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 <a href="https://www.producthunt.com/posts/nocobase?embed=true&utm_source=badge-top-post-topic-badge&utm_medium=badge&utm_souce=badge-nocobase" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/top-post-topic-badge.svg?post_id=456520&theme=light&period=weekly&topic_id=267" alt="NocoBase - Scalability&#0045;first&#0044;&#0032;open&#0045;source&#0032;no&#0045;code&#0032;platform | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-
-## Recent major updates
-
-- [v1.3: REST API data source, mobile v2, and more features - 2024/08/29](https://www.nocobase.com/en/blog/nocobase-1-3)
-- [v1.0.1-alpha.1: Blocks support height settings - 2024/06/07](https://www.nocobase.com/en/blog/release-v101-alpha1)
-- [v1.0.0-alpha.15: New Plugins and Improved “Configure actions” Interaction - 2024/05/19](https://www.nocobase.com/en/blog/release-v100-alpha15)
-- [v1.0: Significant Milestone - 2024/04/28](https://www.nocobase.com/en/blog/release-v10)
-- [v0.21: Block performance optimization - 2024/03/29](https://www.nocobase.com/en/blog/release-v021)
-- [v0.20: Support for multiple data sources - 2024/03/03](https://www.nocobase.com/en/blog/release-v020)
-- [v0.19: Application process optimization - 2024/01/08](https://www.nocobase.com/en/blog/release-v019)
-- [v0.18: Establish a sound testing system - 2023/12/21](https://www.nocobase.com/en/blog/release-v018)
-- [v0.17: New SchemaInitializer and SchemaSettings - 2023/12/11](https://www.nocobase.com/en/blog/release-v017)
-- [v0.16: New cache manager - 2023/11/20](https://www.nocobase.com/en/blog/release-v016)
-- [v0.15: New plugin settings manager - 2023/11/13](https://www.nocobase.com/en/blog/release-v015)
-- [v0.14: New plugin manager, supports adding plugins through UI - 2023/09/11](https://www.nocobase.com/en/blog/release-v014)
-- [v0.13: New application status flow - 2023/08/24](https://www.nocobase.com/en/blog/release-v013)
+</p>
 
 ## What is NocoBase
 
-NocoBase is a scalability-first, open-source no-code development platform.   
+NocoBase is an extensibility-first, open-source no-code development platform.   
 Instead of investing years of time and millions of dollars in research and development, deploy NocoBase in a few minutes and you'll have a private, controllable, and extremely scalable no-code development platform!
 
 Homepage:  
@@ -40,6 +23,16 @@ https://docs.nocobase.com/
 
 Forum:  
 https://forum.nocobase.com/
+
+Tutorials:  
+https://www.nocobase.com/en/tutorials
+
+Use Cases:  
+https://www.nocobase.com/en/blog/tags/customer-stories
+
+## Release Notes
+
+Our [blog](https://www.nocobase.com/en/blog/timeline) is regularly updated with release notes and provides a weekly summary.
 
 ## Distinctive features
 

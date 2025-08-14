@@ -7,6 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import React from 'react';
+import { FileAddOutlined } from '@ant-design/icons';
+
 import { SchemaInitializerItemType, parseCollectionName, useCollectionDataSource, useCompile } from '@nocobase/client';
 
 import { CollectionBlockInitializer } from '../components/CollectionBlockInitializer';
@@ -14,13 +17,13 @@ import CollectionFieldset from '../components/CollectionFieldset';
 import { AssignedFieldsFormSchemaConfig } from '../components/AssignedFieldsFormSchemaConfig';
 import { NAMESPACE } from '../locale';
 import { appends, collection, values } from '../schemas/collection';
-import { getCollectionFieldOptions, useGetCollectionFields } from '../variable';
+import { getCollectionFieldOptions, useGetDataSourceCollectionManager } from '../variable';
 import { Instruction, useNodeSavedConfig } from '.';
 
 function useVariables({ key: name, title, config }, options) {
   const [dataSourceName, collection] = parseCollectionName(config.collection);
   const compile = useCompile();
-  const getCollectionFields = useGetCollectionFields(dataSourceName);
+  const collectionManager = useGetDataSourceCollectionManager(dataSourceName);
   // const depth = config?.params?.appends?.length
   //   ? config?.params?.appends.reduce((max, item) => Math.max(max, item.split('.').length), 1)
   //   : 0;
@@ -41,7 +44,7 @@ function useVariables({ key: name, title, config }, options) {
       },
     ],
     compile,
-    getCollectionFields,
+    collectionManager,
   });
 
   return result;
@@ -52,6 +55,7 @@ export default class extends Instruction {
   type = 'create';
   group = 'collection';
   description = `{{t("Add new record to a collection. You can use variables from upstream nodes to assign values to fields.", { ns: "${NAMESPACE}" })}}`;
+  icon = (<FileAddOutlined style={{}} />);
   fieldset = {
     collection: {
       ...collection,

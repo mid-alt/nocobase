@@ -8,11 +8,9 @@
  */
 
 import React, { createContext, useContext, useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
 import { useACLRoleContext } from '../acl';
-import { ReturnTypeOfUseRequest, useRequest } from '../api-client';
-import { useLocationNoUpdate } from '../application';
-import { useAppSpin } from '../application/hooks/useAppSpin';
+import { ReturnTypeOfUseRequest, useAPIClient, useRequest } from '../api-client';
+import { useAppSpin } from '../application';
 import { useCompile } from '../schema-component';
 
 export const CurrentUserContext = createContext<ReturnTypeOfUseRequest>(null);
@@ -22,9 +20,14 @@ export const useCurrentUserContext = () => {
   return useContext(CurrentUserContext);
 };
 
+export const useIsLoggedIn = () => {
+  const ctx = useContext(CurrentUserContext);
+  return !!ctx?.data?.data;
+};
+
 export const useCurrentRoles = () => {
   const { allowAnonymous } = useACLRoleContext();
-  const { data } = useCurrentUserContext();
+  const { data } = useCurrentUserContext() || {};
   const compile = useCompile();
   const options = useMemo(() => {
     const roles = (data?.data?.roles || []).map(({ name, title }) => ({ name, title: compile(title) }));
@@ -35,29 +38,26 @@ export const useCurrentRoles = () => {
       });
     }
     return roles;
-  }, [allowAnonymous, data?.data?.roles]);
+  }, [allowAnonymous, data?.data?.roles, compile]);
   return options;
 };
 
 export const CurrentUserProvider = (props) => {
+  const api = useAPIClient();
+  const result = useRequest<any>(() =>
+    api
+      .request({
+        url: '/auth:check',
+        skipNotify: true,
+        skipAuth: true,
+      })
+      .then((res) => res?.data),
+  );
+
   const { render } = useAppSpin();
-  const result = useRequest<any>({
-    url: 'auth:check',
-  });
 
   if (result.loading) {
     return render();
   }
-
   return <CurrentUserContext.Provider value={result}>{props.children}</CurrentUserContext.Provider>;
-};
-
-export const NavigateIfNotSignIn = ({ children }) => {
-  const result = useCurrentUserContext();
-  const { pathname, search } = useLocationNoUpdate();
-  const redirect = `?redirect=${pathname}${search}`;
-  if (!result?.data?.data?.id) {
-    return <Navigate replace to={`/signin${redirect}`} />;
-  }
-  return <>{children}</>;
 };

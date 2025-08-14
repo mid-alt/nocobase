@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { round } from 'mathjs';
 import { faker } from '@faker-js/faker';
 import {
   AggregateNode,
@@ -79,7 +80,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -113,7 +114,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -185,7 +186,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -220,7 +221,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -296,7 +297,7 @@ test.describe('filter', () => {
     const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -331,7 +332,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -350,7 +351,7 @@ test.describe('filter', () => {
       aggregateNodeCollectionData.reduce((total, currentValue) => {
         return currentValue.staffnum > 3 ? total + currentValue.staffnum : total;
       }, 0) / aggregateNodeCollectionDataCount;
-    expect(aggregateNodeJobResult).toBe(aggregateNodeCollectionDataAvg);
+    expect(aggregateNodeJobResult).toBe(round(aggregateNodeCollectionDataAvg, 2));
     // 4、后置处理：删除工作流
     await apiDeleteWorkflow(workflowId);
   });
@@ -412,7 +413,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -447,7 +448,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -524,7 +525,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -559,7 +560,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -636,7 +637,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -671,7 +672,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -743,7 +744,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -779,7 +780,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -859,7 +860,7 @@ test.describe('filter', () => {
     const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -895,7 +896,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -984,7 +985,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -1020,7 +1021,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -1097,7 +1098,7 @@ test.describe('filter', () => {
 
     //配置聚合数据节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'aggregate', exact: true }).click();
@@ -1133,7 +1134,7 @@ test.describe('filter', () => {
     // 3、预期结果：工作流成功触发,数据查询成功
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
     const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
     const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));

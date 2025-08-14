@@ -7,16 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Plugin, createStyles, defaultTheme, useCurrentUserSettingsMenu, useGlobalTheme } from '@nocobase/client';
+import { Plugin, createStyles, defaultTheme, useGlobalTheme, useOpenModeContext } from '@nocobase/client';
 import { ConfigProvider } from 'antd';
 import _ from 'lodash';
-import React, { useEffect, useMemo } from 'react';
-import InitializeTheme from './components/InitializeTheme';
-import { ThemeEditorProvider } from './components/ThemeEditorProvider';
-import ThemeList from './components/ThemeList';
-import { ThemeListProvider } from './components/ThemeListProvider';
-import CustomTheme from './components/theme-editor';
-import { useThemeSettings } from './hooks/useThemeSettings';
+import React, { useMemo } from 'react';
+// import InitializeTheme from './components/InitializeTheme';
+// import { ThemeEditorProvider } from './components/ThemeEditorProvider';
+// import ThemeList from './components/ThemeList';
+// import { ThemeListProvider } from './components/ThemeListProvider';
+// import CustomTheme from './components/theme-editor';
+import { lazy } from '@nocobase/client';
+const InitializeTheme = lazy(() => import('./components/InitializeTheme'));
+const { ThemeEditorProvider } = lazy(() => import('./components/ThemeEditorProvider'), 'ThemeEditorProvider');
+const ThemeList = lazy(() => import('./components/ThemeList'));
+const { ThemeListProvider } = lazy(() => import('./components/ThemeListProvider'), 'ThemeListProvider');
+const CustomTheme = lazy(() => import('./components/theme-editor'));
+
+import { ThemeSettings } from './components/ThemeSettings';
 import { NAMESPACE } from './locale';
 
 const useStyles = createStyles(({ css, token }) => {
@@ -38,16 +45,9 @@ const useStyles = createStyles(({ css, token }) => {
 });
 
 const CustomThemeProvider = React.memo((props) => {
-  const { addMenuItem } = useCurrentUserSettingsMenu();
-  const themeItem = useThemeSettings();
   const [open, setOpen] = React.useState(false);
   const { theme, setTheme } = useGlobalTheme();
   const { styles } = useStyles();
-
-  useEffect(() => {
-    // 在页面右上角中添加一个 Theme 菜单项
-    addMenuItem(themeItem, { before: 'divider_3' });
-  }, [addMenuItem, themeItem]);
 
   const contentStyle = useMemo(() => {
     return open
@@ -56,7 +56,7 @@ const CustomThemeProvider = React.memo((props) => {
   }, [open]);
 
   const editor = (
-    <div style={{ display: 'flex', overflow: 'hidden', height: '100%' }}>
+    <div style={{ display: 'flex', overflow: 'auto', height: '100%' }}>
       <div style={contentStyle}>{props.children}</div>
       {open ? (
         <div className={styles.editor}>
@@ -92,6 +92,17 @@ export class PluginThemeEditorClient extends Plugin {
       icon: 'BgColorsOutlined',
       Component: ThemeList,
       aclSnippet: 'pm.theme-editor.themes',
+    });
+    // 个人中心注册 Theme 菜单项
+    this.app.addUserCenterSettingsItem({
+      name: 'theme',
+      sort: 310,
+      Component: ThemeSettings,
+      useVisible() {
+        // 移动端暂不支持切换主题
+        const { isMobile } = useOpenModeContext() || {};
+        return !isMobile;
+      },
     });
   }
 }

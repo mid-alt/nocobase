@@ -27,8 +27,11 @@ import {
   useDesignable,
   useFormBlockContext,
   useColumnSchema,
+  SchemaSettingsLinkageRules,
+  LinkageRuleCategory,
 } from '@nocobase/client';
 import _ from 'lodash';
+import { useTranslation } from 'react-i18next';
 import { useMapTranslation } from '../locale';
 import { useMapBlockContext } from './MapBlockProvider';
 import { findNestedOption } from './utils';
@@ -90,6 +93,19 @@ export const mapBlockSettings = new SchemaSettings({
       Component: SchemaSettingsBlockHeightItem,
     },
     {
+      name: 'blockLinkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { name } = useCollection();
+        const { t } = useTranslation();
+        return {
+          collectionName: name,
+          title: t('Block Linkage rules'),
+          category: LinkageRuleCategory.block,
+        };
+      },
+    },
+    {
       name: 'mapField',
       Component: SchemaSettingsCascaderItem,
       useComponentProps() {
@@ -101,7 +117,7 @@ export const mapBlockSettings = new SchemaSettings({
         const { dn } = useDesignable();
         const { service } = useMapBlockContext();
         const { name } = useCollection();
-        const mapFieldOptions = getCollectionFieldsOptions(name, ['point', 'lineString', 'polygon'], {
+        const mapFieldOptions = getCollectionFieldsOptions(name, ['point', 'lineString', 'polygon'], null, {
           association: ['o2o', 'obo', 'oho', 'o2m', 'm2o', 'm2m'],
         });
         return {
@@ -164,7 +180,7 @@ export const mapBlockSettings = new SchemaSettings({
         const { getCollectionFieldsOptions } = useCollectionManager_deprecated();
         const { name } = useCollection();
         const fieldNames = fieldSchema?.['x-decorator-props']?.['fieldNames'] || {};
-        const mapFieldOptions = getCollectionFieldsOptions(name, ['point', 'lineString', 'polygon'], {
+        const mapFieldOptions = getCollectionFieldsOptions(name, ['point', 'lineString', 'polygon'], null, {
           association: ['o2o', 'obo', 'oho', 'o2m', 'm2o', 'm2m'],
         });
         const isPointField = findNestedOption(fieldNames.field, mapFieldOptions)?.type === 'point';

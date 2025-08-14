@@ -8,11 +8,16 @@
  */
 
 import { css, cx } from '@emotion/css';
+import { FormLayout } from '@formily/antd-v5';
 import { ArrayField } from '@formily/core';
-import { RecursionField, Schema, useField, useFieldSchema } from '@formily/react';
+import { Schema, useField, useFieldSchema } from '@formily/react';
 import { List as AntdList, Col, PaginationProps } from 'antd';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
+import { getCardItemSchema } from '../../../block-provider';
+import { NocoBaseRecursionField } from '../../../formily/NocoBaseRecursionField';
 import { withDynamicSchemaProps } from '../../../hoc/withDynamicSchemaProps';
+import { withSkeletonComponent } from '../../../hoc/withSkeletonComponent';
+import { useToken } from '../../../style/useToken';
 import { SortableItem } from '../../common';
 import { SchemaComponentOptions } from '../../core';
 import { useDesigner, useProps } from '../../hooks';
@@ -112,111 +117,125 @@ const usePaginationProps = () => {
   }
 };
 
-const InternalGridCard = (props: GridCardProps) => {
-  // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
-  const { columnCount: columnCountProp, pagination } = useProps(props);
-  const { service, columnCount: _columnCount = defaultColumnCount } = useGridCardBlockContext();
-  const columnCount = columnCountProp || _columnCount;
-  const { run, params } = service;
-  const meta = service?.data?.meta;
-  const fieldSchema = useFieldSchema();
-  const field = useField<ArrayField>();
-  const Designer = useDesigner();
-  const height = useGridCardBodyHeight();
-  const [schemaMap] = useState(new Map());
-  const getSchema = useCallback(
-    (key) => {
-      if (!schemaMap.has(key)) {
-        schemaMap.set(
-          key,
-          new Schema({
-            type: 'object',
-            properties: {
-              [key]: {
-                ...fieldSchema.properties['item'],
-              },
+const InternalGridCard = withSkeletonComponent(
+  (props: GridCardProps) => {
+    // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
+    const { columnCount: columnCountProp, pagination } = useProps(props);
+    const { service, columnCount: _columnCount = defaultColumnCount } = useGridCardBlockContext();
+    const columnCount = columnCountProp || _columnCount;
+    const { run, params } = service;
+    const meta = service?.data?.meta;
+    const fieldSchema = useFieldSchema();
+    const field = useField<ArrayField>();
+    const Designer = useDesigner();
+    const height = useGridCardBodyHeight();
+    const getSchema = useCallback(
+      (key) => {
+        return new Schema({
+          type: 'object',
+          properties: {
+            [key]: {
+              ...fieldSchema.properties['item'],
             },
-          }),
-        );
-      }
-      return schemaMap.get(key);
-    },
-    [fieldSchema.properties, schemaMap],
-  );
+          },
+        });
+      },
+      [fieldSchema.properties],
+    );
+    const { token } = useToken();
 
-  const onPaginationChange: PaginationProps['onChange'] = useCallback(
-    (page, pageSize) => {
-      run({
-        ...params?.[0],
-        page: page,
-        pageSize: pageSize,
-      });
-    },
-    [run, params],
-  );
-  const gridCardProps = {
-    ...usePaginationProps(),
-    ...pagination,
-    onChange: onPaginationChange,
-  };
-  return (
-    <SchemaComponentOptions
-      scope={{
-        useGridCardItemProps,
-        useGridCardActionBarProps,
-      }}
-    >
-      <SortableItem
-        className={cx(
-          'nb-card-list',
-          designerCss,
-          css`
-            .ant-spin-nested-loading {
-              height: ${height ? height + `px` : '100%'};
-              overflow-y: ${height ? 'auto' : null};
-              overflow-x: clip;
-              .nb-action-bar {
-                margin-top: 0px !important;
-              }
-            }
-          `,
-        )}
+    const onPaginationChange: PaginationProps['onChange'] = useCallback(
+      (page, pageSize) => {
+        run({
+          ...params?.[0],
+          page: page,
+          pageSize: pageSize,
+        });
+      },
+      [run, params],
+    );
+    const gridCardProps = {
+      ...usePaginationProps(),
+      ...pagination,
+      onChange: onPaginationChange,
+    };
+    const cardItemSchema = getCardItemSchema?.(fieldSchema);
+    const {
+      layout = 'vertical',
+      labelAlign = 'left',
+      labelWidth = 120,
+      labelWrap = true,
+    } = cardItemSchema?.['x-component-props'] || {};
+
+    return (
+      <SchemaComponentOptions
+        scope={{
+          useGridCardItemProps,
+          useGridCardActionBarProps,
+        }}
       >
-        <AntdList
-          pagination={
-            !meta || meta.count <= meta.pageSize
-              ? false
-              : {
-                  ...gridCardProps,
+        <SortableItem
+          className={cx(
+            'nb-card-list',
+            designerCss,
+            css`
+              .ant-spin-nested-loading {
+                height: ${height ? height + `px` : '100%'};
+                overflow-y: ${height ? 'auto' : null};
+                overflow-x: clip;
+                .nb-action-bar {
+                  margin-top: 0px !important;
                 }
-          }
-          dataSource={field.value}
-          grid={{
-            ...columnCount,
-            sm: columnCount.xs,
-            xl: columnCount.lg,
-            gutter: [rowGutter, rowGutter],
-          }}
-          renderItem={(item, index) => {
-            return (
-              <Col style={{ height: '100%' }}>
-                <RecursionField
-                  key={index}
-                  basePath={field.address}
-                  name={index}
-                  onlyRenderProperties
-                  schema={getSchema(index)}
-                ></RecursionField>
-              </Col>
-            );
-          }}
-          loading={service?.loading}
-        />
-        <Designer />
-      </SortableItem>
-    </SchemaComponentOptions>
-  );
-};
+              }
+            `,
+          )}
+        >
+          <FormLayout
+            layout={layout}
+            labelAlign={labelAlign}
+            labelWidth={layout === 'horizontal' ? labelWidth : null}
+            labelWrap={labelWrap}
+          >
+            <AntdList
+              pagination={
+                !meta || meta.count <= meta.pageSize
+                  ? false
+                  : {
+                      ...gridCardProps,
+                    }
+              }
+              dataSource={field.value}
+              grid={{
+                ...columnCount,
+                sm: columnCount.xs,
+                xl: columnCount.lg,
+                gutter: [token.marginBlock / 2, token.marginBlock / 2],
+              }}
+              renderItem={(item, index) => {
+                return (
+                  <Col style={{ height: '100%' }} className="nb-card-item-warper">
+                    <NocoBaseRecursionField
+                      key={index}
+                      basePath={field.address}
+                      name={index}
+                      onlyRenderProperties
+                      schema={getSchema(index)}
+                    ></NocoBaseRecursionField>
+                  </Col>
+                );
+              }}
+              loading={service?.loading}
+            />
+          </FormLayout>
+          <Designer />
+        </SortableItem>
+      </SchemaComponentOptions>
+    );
+  },
+  {
+    displayName: 'InternalGridCard',
+  },
+);
 
 export const GridCard = withDynamicSchemaProps(InternalGridCard) as typeof InternalGridCard & {
   Item: typeof GridCardItem;

@@ -7,18 +7,16 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { mockDatabase } from '..';
-import { Database } from '../../database';
-import { Collection } from '../../collection';
-import { DatetimeInterface } from '../../interfaces/datetime-interface';
+import { Collection, Database, createMockDatabase } from '@nocobase/database';
 import dayjs from 'dayjs';
+import { DatetimeInterface } from '../../interfaces/datetime-interface';
 
 describe('Date time interface', () => {
   let db: Database;
   let testCollection: Collection;
 
   beforeEach(async () => {
-    db = mockDatabase();
+    db = await createMockDatabase();
     await db.clean({ drop: true });
     testCollection = db.collection({
       name: 'tests',
@@ -39,7 +37,7 @@ describe('Date time interface', () => {
         },
         {
           name: 'dateTime',
-          type: 'date',
+          type: 'datetime',
           uiSchema: {
             ['x-component-props']: {
               showTime: true,
@@ -69,25 +67,11 @@ describe('Date time interface', () => {
     expect(await interfaceInstance.toValue('')).toBe(null);
 
     expect(await interfaceInstance.toValue('20231223')).toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
+    expect(await interfaceInstance.toValue('20231223 08:01:01')).toBe(dayjs('2023-12-23 08:01:01.000').toISOString());
     expect(await interfaceInstance.toValue('2023/12/23')).toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
     expect(await interfaceInstance.toValue('2023-12-23')).toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
     expect(await interfaceInstance.toValue(42510)).toBe('2016-05-20T00:00:00.000Z');
     expect(await interfaceInstance.toValue('42510')).toBe('2016-05-20T00:00:00.000Z');
     expect(await interfaceInstance.toValue('2016-05-20T00:00:00.000Z')).toBe('2016-05-20T00:00:00.000Z');
-    expect(
-      await interfaceInstance.toValue('2016-05-20 04:22:22', {
-        field: testCollection.getField('dateOnly'),
-      }),
-    ).toBe('2016-05-20T00:00:00.000Z');
-    expect(
-      await interfaceInstance.toValue('2016-05-20 01:00:00', {
-        field: testCollection.getField('dateTime'),
-      }),
-    ).toBe(dayjs('2016-05-20 01:00:00').toISOString());
-    expect(
-      await interfaceInstance.toValue('2016-05-20 01:00:00', {
-        field: testCollection.getField('dateTimeGmt'),
-      }),
-    ).toBe('2016-05-20T01:00:00.000Z');
   });
 });

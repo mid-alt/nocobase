@@ -18,6 +18,7 @@ import {
   useCollectionManager_deprecated,
   useDataSourceManager,
   useVariables,
+  useLocalVariables,
 } from '@nocobase/client';
 import { flatten, parse, unflatten } from '@nocobase/utils/client';
 import { useMemoizedFn } from 'ahooks';
@@ -66,7 +67,7 @@ export const useChartData = () => {
   const chartCollections: {
     [dataSource: string]: string[];
   } = useMemo(() => {
-    return Object.values(charts)
+    return Object.values(charts || {})
       .filter((chart) => chart)
       .reduce((mp, chart) => {
         const { dataSource, collection } = chart;
@@ -103,6 +104,7 @@ export const useChartFilter = () => {
   const action = fieldSchema?.['x-action'];
   const { fields: fieldProps, form } = useContext(ChartFilterContext);
   const variables = useVariables();
+  const localVariables = useLocalVariables();
 
   const getChartFilterFields = ({
     dataSource,
@@ -127,14 +129,19 @@ export const useChartFilter = () => {
         title,
         name: `${name}.${field.name}`,
         required: false,
-        'x-designer': 'ChartFilterItemDesigner',
+        'x-toolbar': 'ChartFilterItemToolbar',
+        'x-settings': 'chart:filterForm:item',
         'x-component': 'CollectionField',
         'x-decorator': 'ChartFilterFormItem',
         'x-data-source': dataSource,
         'x-collection-field': `${fieldName}.${field.name}`,
         'x-component-props': {
-          ...field.uiSchema?.['x-component-props'],
+          utc: false,
+          underFilter: true,
+          component: defaultOperator?.schema?.['x-component'],
           'filter-operator': defaultOperator,
+          'data-source': dataSource,
+          'collection-field': `${fieldName}.${field.name}`,
         },
       };
       if (field.interface === 'formula') {
@@ -184,14 +191,21 @@ export const useChartFilter = () => {
         type: 'string',
         name: `${name}.${child.name}`,
         required: false,
-        'x-designer': 'ChartFilterItemDesigner',
+        'x-settings': 'chart:filterForm:item',
+        'x-toolbar': 'ChartFilterItemToolbar',
         'x-decorator': 'ChartFilterFormItem',
+        'x-component': 'CollectionField',
         'x-data-source': dataSource,
         'x-collection-field': `${fieldName}.${child.name}`,
         ...child.schema,
         title,
         'x-component-props': {
+          utc: false,
+          underFilter: true,
+          component: defaultOperator?.schema?.['x-component'],
           'filter-operator': defaultOperator,
+          'data-source': dataSource,
+          'collection-field': `${fieldName}.${child.name}`,
         },
       };
       if (defaultOperator?.noValue) {
@@ -315,8 +329,12 @@ export const useChartFilter = () => {
       .filter(([_, props]) => props)
       .forEach(([name, props]) => {
         const { operator } = props || {};
-        const { dataSource, fieldName: _fieldName } = parseFilterFieldName(name);
-        let fieldName = _fieldName;
+        let { dataSource, collectionField: fieldName } = props || {};
+        if (!fieldName) {
+          const parsed = parseFilterFieldName(name);
+          dataSource = parsed.dataSource;
+          fieldName = parsed.fieldName;
+        }
         const ds = dm.getDataSource(dataSource);
         const cm = ds.collectionManager;
         const field = cm.getCollectionField(fieldName);
@@ -418,7 +436,7 @@ export const useChartFilter = () => {
           if (['$user', '$date', '$nDate', '$nRole', '$nFilter'].some((n) => value.includes(n))) {
             return value;
           }
-          const result = variables?.parseVariable(value).then(({ value }) => value);
+          const result = variables?.parseVariable(value, localVariables).then(({ value }) => value);
           return result;
         },
       });

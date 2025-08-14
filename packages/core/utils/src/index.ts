@@ -8,15 +8,18 @@
  */
 
 import lodash from 'lodash';
-import { dayjs } from './dayjs';
+export { lodash };
+export { dayjs } from './dayjs';
 
 export * from './assign';
 export * from './collections-graph';
 export * from './common';
+export * from './crypto';
 export * from './date';
 export * from './dayjs';
 export * from './forEach';
 export * from './fs-exists';
+export * from './handlebars';
 export * from './isValidFilter';
 export * from './json-templates';
 export * from './koa-multer';
@@ -34,6 +37,8 @@ export * from './toposort';
 export * from './uid';
 export * from './url';
 export * from './i18n';
-
-export { dayjs, lodash };
+export * from './wrap-middleware';
+export * from './object-to-cli-args';
+export * from './parsedValue';
+export * from './dateRangeUtils';
 export { Schema } from '@formily/json-schema';

@@ -71,7 +71,7 @@ test.describe('field data entry', () => {
     const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
     //配置Manual节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -99,7 +99,7 @@ test.describe('field data entry', () => {
     await page.getByLabel(`designer-schema-settings-CardItem-SimpleDesigner-${randomValue}`).hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Form' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-workflowManual:customForm:configureFields-${randomValue}"]`)
@@ -114,7 +114,7 @@ test.describe('field data entry', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await manualNode.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
 
     // 2、测试步骤：添加数据触发工作流
     const triggerNodeCollectionRecordOne =
@@ -126,21 +126,17 @@ test.describe('field data entry', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     const manualNodeRecord = manualNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(manualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();
@@ -214,7 +210,7 @@ test.describe('field data entry', () => {
     const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
     //配置Manual节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -242,7 +238,7 @@ test.describe('field data entry', () => {
     await page.getByLabel(`designer-schema-settings-CardItem-SimpleDesigner-${randomValue}`).hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Form' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-workflowManual:customForm:configureFields-${randomValue}"]`)
@@ -257,7 +253,7 @@ test.describe('field data entry', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await manualNode.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
 
     // 2、测试步骤：添加数据触发工作流
     const triggerNodeCollectionRecordOne =
@@ -269,21 +265,17 @@ test.describe('field data entry', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     const manualNodeRecord = manualNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(manualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();
@@ -357,7 +349,7 @@ test.describe('field data entry', () => {
     const triggerNodeObj = JSON.parse(JSON.stringify(triggerNode));
     //配置Manual节点
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await collectionTriggerNode.addNodeButton.click();
     await page.getByRole('button', { name: 'manual', exact: true }).click();
@@ -385,7 +377,7 @@ test.describe('field data entry', () => {
     await page.getByLabel(`designer-schema-settings-CardItem-SimpleDesigner-${randomValue}`).hover();
     await page.getByRole('menuitem', { name: 'Edit block title' }).click();
     const blockTitle = 'Form' + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
-    await page.getByLabel('Edit block title').getByRole('textbox').fill(blockTitle);
+    await page.getByLabel('block-title').fill(blockTitle);
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await page
       .locator(`button[aria-label^="schema-initializer-Grid-workflowManual:customForm:configureFields-${randomValue}"]`)
@@ -400,7 +392,7 @@ test.describe('field data entry', () => {
     await page.mouse.move(300, 0, { steps: 100 });
     await page.mouse.click(300, 0);
     await manualNode.submitButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
 
     // 2、测试步骤：添加数据触发工作流
     const triggerNodeCollectionRecordOne =
@@ -412,21 +404,17 @@ test.describe('field data entry', () => {
     // 3、预期结果：工作流成功触发,待办弹窗表单中显示数据
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     const newPage = mockPage();
     await newPage.goto();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('menuitem', { name: 'check-square Workflow todos' }).click();
     await page.mouse.move(300, 0, { steps: 100 });
     await page.waitForTimeout(300);
-    await page
-      .locator(`//td[span[text()="${manualNodeName}"]]`)
-      .locator('xpath=preceding-sibling::td[1]')
-      .locator('text=View')
-      .click();
+    await page.locator('.itemCss', { hasText: manualNodeName }).getByLabel('action-Action.Link-View-view-').click();
     const manualNodeRecord = manualNodeFieldDisplayName + dayjs().format('YYYYMMDDHHmmss.SSS').toString();
     await page.getByRole('textbox').fill(manualNodeRecord);
     await page.getByRole('button', { name: 'Continue the process' }).click();

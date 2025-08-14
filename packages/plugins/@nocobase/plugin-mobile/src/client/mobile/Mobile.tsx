@@ -8,8 +8,8 @@
  */
 
 import {
-  Action,
   AdminProvider,
+  AllDataBlocksProvider,
   AntdAppProvider,
   AssociationFieldMode,
   AssociationFieldModeProvider,
@@ -18,14 +18,17 @@ import {
   OpenModeProvider,
   useAssociationFieldModeContext,
   usePlugin,
+  usePopupSettings,
   zIndexContext,
 } from '@nocobase/client';
-import React from 'react';
+import React, { FC } from 'react';
 import { isDesktop } from 'react-device-detect';
 
+import { theme } from 'antd';
 import { ActionDrawerUsedInMobile, useToAdaptActionDrawerToMobile } from '../adaptor-of-desktop/ActionDrawer';
 import { useToAdaptFilterActionToMobile } from '../adaptor-of-desktop/FilterAction';
 import { InternalPopoverNesterUsedInMobile } from '../adaptor-of-desktop/InternalPopoverNester';
+import { useToAddMobilePopupBlockInitializers } from '../adaptor-of-desktop/mobile-action-page/blockInitializers';
 import { MobileActionPage } from '../adaptor-of-desktop/mobile-action-page/MobileActionPage';
 import { ResetSchemaOptionsProvider } from '../adaptor-of-desktop/ResetSchemaOptionsProvider';
 import { PageBackgroundColor } from '../constants';
@@ -34,11 +37,29 @@ import { PluginMobileClient } from '../index';
 import { MobileAppProvider } from './MobileAppContext';
 import { useStyles } from './styles';
 
+const CommonDrawer: FC = (props) => {
+  const { isPopupVisibleControlledByURL } = usePopupSettings();
+
+  // 在移动端布局中，只要弹窗是通过 URL 打开的，都需要显示成子页面的样子。因为这样可以通过左滑返回
+  if (isPopupVisibleControlledByURL()) {
+    return <MobileActionPage {...(props as any)} />;
+  }
+
+  return <ActionDrawerUsedInMobile {...props} />;
+};
+
+const openModeToComponent = {
+  page: CommonDrawer,
+  drawer: ActionDrawerUsedInMobile,
+  modal: ActionDrawerUsedInMobile,
+};
+
 export const Mobile = () => {
   useToAdaptFilterActionToMobile();
   useToAdaptActionDrawerToMobile();
+  useToAddMobilePopupBlockInitializers();
 
-  const { styles } = useStyles();
+  const { componentCls, hashId } = useStyles();
   const mobilePlugin = usePlugin(PluginMobileClient);
   const MobileRouter = mobilePlugin.getRouterComponent();
   const AdminProviderComponent = mobilePlugin?.options?.config?.skipLogin ? React.Fragment : AdminProvider;
@@ -51,7 +72,10 @@ export const Mobile = () => {
         viewportMeta.setAttribute('name', 'viewport');
         document.head.appendChild(viewportMeta);
       }
-      viewportMeta.setAttribute('content', 'width=device-width,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no');
+      viewportMeta.setAttribute(
+        'content',
+        'width=device-width,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover',
+      );
 
       document.body.style.backgroundColor = PageBackgroundColor;
       document.body.style.overflow = 'hidden';
@@ -81,21 +105,21 @@ export const Mobile = () => {
         <GlobalThemeProvider
           theme={{
             token: {
-              marginBlock: 18,
-              borderRadiusBlock: 0,
-              boxShadowTertiary: 'none',
+              paddingPageHorizontal: 8,
+              paddingPageVertical: 8,
+              marginBlock: 12,
+              borderRadiusBlock: 8,
+              fontSize: 14,
             },
+            algorithm: theme.compactAlgorithm,
           }}
         >
-          <AntdAppProvider className={`mobile-container ${styles.nbMobile}`}>
+          <AntdAppProvider className={`mobile-container ${componentCls} ${hashId}`}>
             <OpenModeProvider
               defaultOpenMode="page"
+              isMobile={true}
               hideOpenMode
-              openModeToComponent={{
-                page: MobileActionPage,
-                drawer: ActionDrawerUsedInMobile,
-                modal: Action.Modal,
-              }}
+              openModeToComponent={openModeToComponent}
             >
               <BlockTemplateProvider componentNamePrefix="mobile-">
                 <MobileAppProvider>
@@ -103,7 +127,9 @@ export const Mobile = () => {
                     <AssociationFieldModeProvider modeToComponent={modeToComponent}>
                       {/* the z-index of all popups and subpages will be based on this value */}
                       <zIndexContext.Provider value={100}>
-                        <MobileRouter />
+                        <AllDataBlocksProvider>
+                          <MobileRouter />
+                        </AllDataBlocksProvider>
                       </zIndexContext.Provider>
                     </AssociationFieldModeProvider>
                   </ResetSchemaOptionsProvider>

@@ -13,6 +13,7 @@ import moment from 'moment';
 import { offsetFromString } from './date';
 import { dayjs } from './dayjs';
 import { getValuesByPath } from './getValuesByPath';
+import { getDayRangeByParams } from './dateRangeUtils';
 
 const re = /^\s*\{\{([\s\S]*)\}\}\s*$/;
 
@@ -107,6 +108,9 @@ const dateValueWrapper = (value: any, timezone?: string) => {
   if (!value) {
     return null;
   }
+  if (value.type) {
+    value = getDayRangeByParams({ ...value, timezone });
+  }
   if (Array.isArray(value)) {
     if (value.length === 2) {
       value.push('[]', timezone);
@@ -182,6 +186,13 @@ export const parseFilter = async (filter: any, opts: ParseFilterOptions = {}) =>
       }
       if (isDateOperator(operator)) {
         const field = getField?.(path);
+
+        if (field?.constructor.name === 'DateOnlyField' || field?.constructor.name === 'DatetimeNoTzField') {
+          if (value.type) {
+            return getDayRangeByParams({ ...value, timezone: field?.timezone || timezone });
+          }
+          return value;
+        }
         return dateValueWrapper(value, field?.timezone || timezone);
       }
       return value;

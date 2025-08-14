@@ -7,28 +7,32 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { observer, RecursionField, useField, useFieldSchema } from '@formily/react';
+import { observer, useField, useFieldSchema } from '@formily/react';
 import {
   css,
   DndContext,
   Icon,
+  NocoBaseRecursionField,
   SchemaComponent,
   SortableItem,
   Tabs as TabsOfPC,
   useBackButton,
+  useCompile,
   useDesigner,
+  useFlag,
   useSchemaInitializerRender,
   useTabsContext,
+  withDynamicSchemaProps,
 } from '@nocobase/client';
 import { Tabs } from 'antd-mobile';
 import { LeftOutline } from 'antd-mobile-icons';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMobileApp } from '../../mobile';
 import { MobilePageHeader } from '../../pages/dynamic-page';
 import { MobilePageContentContainer } from '../../pages/dynamic-page/content/MobilePageContentContainer';
 import { useStyles } from '../../pages/dynamic-page/header/tabs';
 import { hideDivider } from '../hideDivider';
-import { useMobileTabsForMobileActionPageStyle } from './MobileTabsForMobileActionPage.style';
 
 export const MobileTabsForMobileActionPage: any = observer(
   (props) => {
@@ -36,10 +40,10 @@ export const MobileTabsForMobileActionPage: any = observer(
     const { render } = useSchemaInitializerRender(fieldSchema['x-initializer'], fieldSchema['x-initializer-props']);
     const { activeKey: _activeKey, onChange: _onChange } = useTabsContext() || {};
     const [activeKey, setActiveKey] = useState(_activeKey);
-    const { styles } = useStyles();
-    const { styles: mobileTabsForMobileActionPageStyle } = useMobileTabsForMobileActionPageStyle();
+    const { componentCls, hashId } = useStyles();
+    const { showBackButton } = useMobileApp();
     const { goBack } = useBackButton();
-    const keyToTabRef = useRef({});
+    const { isInMobileDrawer } = useFlag();
 
     const onChange = useCallback(
       (key) => {
@@ -55,8 +59,9 @@ export const MobileTabsForMobileActionPage: any = observer(
 
     const items = useMemo(() => {
       const result = fieldSchema.mapProperties((schema, key) => {
-        keyToTabRef.current[key] = <SchemaComponent name={key} schema={schema} onlyRenderProperties distributed />;
-        return <Tabs.Tab title={<RecursionField name={key} schema={schema} onlyRenderSelf />} key={key}></Tabs.Tab>;
+        return (
+          <Tabs.Tab title={<NocoBaseRecursionField name={key} schema={schema} onlyRenderSelf />} key={key}></Tabs.Tab>
+        );
       });
 
       return result;
@@ -80,20 +85,26 @@ export const MobileTabsForMobileActionPage: any = observer(
 
     return (
       <>
-        <MobilePageHeader>
-          <div className={styles.mobilePageTabs} data-testid="mobile-action-page-tabs">
-            <div className={mobileTabsForMobileActionPageStyle.backButton} onClick={goBack}>
-              <LeftOutline />
+        {!isInMobileDrawer && (
+          <MobilePageHeader>
+            <div className={`${componentCls} ${hashId}`} data-testid="mobile-action-page-tabs">
+              {showBackButton && (
+                <div className="nb-mobile-page-tabs-back-button" onClick={goBack}>
+                  <LeftOutline />
+                </div>
+              )}
+              <DndContext>
+                <Tabs activeKey={activeKey} onChange={onChange} className="nb-mobile-page-tabs-list">
+                  {items}
+                </Tabs>
+              </DndContext>
+              <div className="nb-mobile-page-tabs-button">{render()}</div>
             </div>
-            <DndContext>
-              <Tabs activeKey={activeKey} onChange={onChange} className={styles.mobilePageTabsList}>
-                {items}
-              </Tabs>
-            </DndContext>
-            <div className={mobileTabsForMobileActionPageStyle.container}>{render()}</div>
-          </div>
-        </MobilePageHeader>
-        <MobilePageContentContainer hideTabBar>{tabContent}</MobilePageContentContainer>
+          </MobilePageHeader>
+        )}
+        <MobilePageContentContainer hideTabBar displayPageHeader={!isInMobileDrawer}>
+          {tabContent}
+        </MobilePageContentContainer>
       </>
     );
   },
@@ -148,18 +159,28 @@ const designerCss = css`
   }
 `;
 
-MobileTabsForMobileActionPage.TabPane = observer(
-  (props: any) => {
-    const Designer = useDesigner();
-    const field = useField();
-    return (
-      <SortableItem className={classNames('nb-action-link', designerCss, props.className)}>
-        {props.icon && <Icon style={{ marginRight: 2 }} type={props.icon} />} {props.tab || field.title}
-        <Designer />
-      </SortableItem>
-    );
-  },
-  { displayName: 'MobileTabsForMobileActionPage.TabPane' },
+MobileTabsForMobileActionPage.TabPane = withDynamicSchemaProps(
+  observer(
+    (props: any) => {
+      const Designer = useDesigner();
+      const field = useField();
+      const compile = useCompile();
+
+      if (props.hidden) {
+        return null;
+      }
+
+      return (
+        <SortableItem className={classNames('nb-action-link', designerCss, props.className)}>
+          {props.icon && <Icon style={{ marginRight: 2 }} type={props.icon} />} {props.tab || compile(field.title)}
+          <Designer />
+        </SortableItem>
+      );
+    },
+    { displayName: 'MobileTabsForMobileActionPage.TabPane' },
+  ),
 );
+
+MobileTabsForMobileActionPage.displayName = 'MobileTabsForMobileActionPage';
 
 MobileTabsForMobileActionPage.Designer = TabsOfPC.Designer;

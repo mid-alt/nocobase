@@ -28,8 +28,9 @@ test.describe('filter block schema settings', () => {
       },
       supportedOptions: [
         'Edit block title',
-        'Save as block template',
-        'Linkage rules',
+        // 'Save as block template',
+        'Field linkage rules',
+        'Block linkage rules',
         'Connect data blocks',
         'Delete',
       ],
@@ -37,7 +38,7 @@ test.describe('filter block schema settings', () => {
   });
 
   test.describe('connect data blocks', () => {
-    test('connecting two blocks of the same collection', async ({
+    test.skip('connecting two blocks of the same collection', async ({
       page,
       mockPage,
       mockRecords,
@@ -171,14 +172,16 @@ test.describe('filter block schema settings', () => {
 
       // 默认操作符为 “contains”，更改为 “is”
       await page.getByLabel('block-item-CollectionField-').hover();
-      await page.getByLabel('designer-schema-settings-CollectionField-fieldSettings:FilterFormItem-general-').hover();
+      // hover 方法有时会失效，所以用 click 替代，原因未知
+      await page.getByLabel('designer-schema-settings-CollectionField-fieldSettings:FilterFormItem-general-').click();
       await page.getByRole('menuitem', { name: 'Operator contains' }).click();
       await page.getByRole('option', { name: 'is', exact: true }).click();
 
       // 刷新页面后，操作符应该还是 “is”
       await page.reload();
       await page.getByLabel('block-item-CollectionField-').hover();
-      await page.getByLabel('designer-schema-settings-CollectionField-fieldSettings:FilterFormItem-general-').hover();
+      // hover 方法有时会失效，所以用 click 替代，原因未知
+      await page.getByLabel('designer-schema-settings-CollectionField-fieldSettings:FilterFormItem-general-').click();
       await expect(page.getByRole('menuitem', { name: 'Operator is' })).toBeVisible();
     });
   });

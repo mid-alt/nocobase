@@ -43,6 +43,11 @@ describe('workflow > Plugin', () => {
       });
 
       expect(workflow.current).toBe(true);
+
+      expect(workflow.stats).toBeDefined();
+      expect(workflow.stats.executed).toBe(0);
+      expect(workflow.versionStats).toBeDefined();
+      expect(workflow.versionStats.executed).toBe(0);
     });
 
     it('create with disabled', async () => {
@@ -273,7 +278,7 @@ describe('workflow > Plugin', () => {
 
       const p1 = await PostRepo.create({ values: { title: 't1' } });
 
-      await sleep(1000);
+      await sleep(500);
 
       const [e1] = await w1.getExecutions();
       expect(e1.status).toBe(EXECUTION_STATUS.RESOLVED);
@@ -299,11 +304,32 @@ describe('workflow > Plugin', () => {
       const p2 = await PostRepo.create({ values: { title: 't2' } });
       const p3 = await PostRepo.create({ values: { title: 't3' } });
 
-      await sleep(1000);
+      await sleep(500);
 
       const executions = await w1.getExecutions();
       expect(executions.length).toBe(3);
       expect(executions.map((item) => item.status)).toEqual(Array(3).fill(EXECUTION_STATUS.RESOLVED));
+    });
+
+    it('duplicated event trigger', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'asyncTrigger',
+      });
+
+      const n1 = await w1.createNode({
+        type: 'asyncResume',
+      });
+
+      plugin.trigger(w1, {}, { eventKey: 'a' });
+      plugin.trigger(w1, {}, { eventKey: 'a' });
+
+      await sleep(1000);
+
+      const executions = await w1.getExecutions();
+      expect(executions.length).toBe(1);
+      const jobs = await executions[0].getJobs();
+      expect(jobs.length).toBe(1);
     });
 
     it('when server starts, process all created executions', async () => {
@@ -330,9 +356,16 @@ describe('workflow > Plugin', () => {
         },
       });
 
+      const e1s = await w1.getExecutions();
+      expect(e1s.length).toBe(1);
+
       await app.start();
 
       await sleep(500);
+
+      const w1_1 = plugin.enabledCache.get(w1.id);
+      expect(w1_1.stats).toBeDefined();
+      expect(w1_1.stats.executed).toBe(0);
 
       await e1.reload();
       expect(e1.status).toBe(EXECUTION_STATUS.RESOLVED);
@@ -510,7 +543,7 @@ describe('workflow > Plugin', () => {
     });
   });
 
-  describe('sync', () => {
+  describe('sync trigger', () => {
     it('sync on trigger class', async () => {
       const w1 = await WorkflowModel.create({
         enabled: true,
@@ -540,6 +573,62 @@ describe('workflow > Plugin', () => {
       expect(executions[0].status).toBe(EXECUTION_STATUS.RESOLVED);
       expect(processor.execution.id).toBe(executions[0].id);
       expect(processor.execution.status).toBe(executions[0].status);
+    });
+  });
+
+  describe('stats', () => {
+    it('stats record should be created after start', async () => {
+      const app1 = await getApp({
+        skipStart: true,
+        name: 'abc',
+      });
+
+      const WModel = app1.db.getCollection('workflows').model;
+
+      const w1 = await WModel.create(
+        {
+          enabled: true,
+          type: 'syncTrigger',
+          key: 'abc',
+          current: true,
+        },
+        {
+          hooks: false,
+        },
+      );
+
+      const s1 = await w1.getStats();
+      const vs1 = await w1.getVersionStats();
+      expect(s1).toBeNull();
+      expect(vs1).toBeNull();
+
+      await app1.start();
+
+      const s2 = await w1.getStats();
+      const vs2 = await w1.getVersionStats();
+      expect(s2.executed).toBe(0);
+      expect(vs2.executed).toBe(0);
+    });
+
+    it.skipIf(process.env.DB_DIALECT === 'sqlite')('bigint stats', async () => {
+      const WorkflowRepo = app.db.getRepository('workflows');
+
+      const w1 = await WorkflowRepo.create({
+        values: {
+          enabled: true,
+          type: 'syncTrigger',
+          key: 'abc',
+          current: true,
+        },
+        hooks: false,
+      });
+      await w1.createStats({ executed: '10000000000000001' });
+      await w1.createVersionStats({ executed: '10000000000000001' });
+
+      const s1 = await w1.getStats();
+      const vs1 = await w1.getVersionStats();
+      expect(s1.executed).toBe('10000000000000001');
+      expect(vs1.executed).toBe('10000000000000001');
     });
   });
 });

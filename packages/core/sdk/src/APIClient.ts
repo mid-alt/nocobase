@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosRequestHeaders, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, RawAxiosRequestHeaders } from 'axios';
 import qs from 'qs';
 
 export interface ActionParams {
@@ -22,7 +22,7 @@ type ResourceActionOptions<P = any> = {
   params?: P;
 };
 
-type ResourceAction = (params?: ActionParams) => Promise<any>;
+type ResourceAction = (params?: ActionParams, opts?: any) => Promise<any>;
 
 export type IResource = {
   [key: string]: ResourceAction;
@@ -166,6 +166,12 @@ export class Auth {
    */
   setToken(token: string) {
     this.setOption('token', token);
+
+    if (this.api['app']) {
+      this.api['app'].eventBus.dispatchEvent(
+        new CustomEvent('auth:tokenChanged', { detail: { token, authenticator: this.authenticator } }),
+      );
+    }
   }
 
   /**
@@ -210,8 +216,8 @@ export class Auth {
       },
     });
     const data = response?.data?.data;
-    this.setToken(data?.token);
     this.setAuthenticator(authenticator);
+    this.setToken(data?.token);
     return response;
   }
 
@@ -234,6 +240,45 @@ export class Auth {
     this.setToken(null);
     this.setRole(null);
     this.setAuthenticator(null);
+    return response;
+  }
+
+  async lostPassword(values: any): Promise<AxiosResponse<any>> {
+    // 获取当前 URL 的查询参数
+    const searchParams = new URLSearchParams(window.location.search);
+
+    // 转换为对象
+    const paramsObject = Object.fromEntries(searchParams.entries());
+
+    const response = await this.api.request({
+      method: 'post',
+      url: 'auth:lostPassword',
+      data: {
+        ...values,
+        baseURL: window.location.href.split('/forgot-password')[0],
+      },
+      headers: {
+        'X-Authenticator': paramsObject.name,
+      },
+    });
+    return response;
+  }
+
+  async resetPassword(values: any): Promise<AxiosResponse<any>> {
+    const response = await this.api.request({
+      method: 'post',
+      url: 'auth:resetPassword',
+      data: values,
+    });
+    return response;
+  }
+
+  async checkResetToken(values: any): Promise<AxiosResponse<any>> {
+    const response = await this.api.request({
+      method: 'post',
+      url: 'auth:checkResetToken',
+      data: values,
+    });
     return response;
   }
 }
@@ -267,6 +312,7 @@ export class MemoryStorage extends Storage {
 
 interface ExtendedOptions {
   authClass?: any;
+  storageType?: 'localStorage' | 'sessionStorage' | 'memory';
   storageClass?: any;
   storagePrefix?: string;
 }
@@ -274,6 +320,7 @@ interface ExtendedOptions {
 export type APIClientOptions = AxiosInstance | (AxiosRequestConfig & ExtendedOptions);
 
 export class APIClient {
+  options?: APIClientOptions;
   axios: AxiosInstance;
   auth: Auth;
   storage: Storage;
@@ -296,14 +343,15 @@ export class APIClient {
     return headers;
   }
 
-  constructor(instance?: APIClientOptions) {
-    if (typeof instance === 'function') {
-      this.axios = instance;
+  constructor(options?: APIClientOptions) {
+    this.options = options;
+    if (typeof options === 'function') {
+      this.axios = options;
     } else {
-      const { authClass, storageClass, storagePrefix = 'NOCOBASE_', ...others } = instance || {};
+      const { authClass, storageType, storageClass, storagePrefix = 'NOCOBASE_', ...others } = options || {};
       this.storagePrefix = storagePrefix;
       this.axios = axios.create(others);
-      this.initStorage(storageClass);
+      this.initStorage(storageClass, storageType);
       if (authClass) {
         this.auth = new authClass(this);
       }
@@ -317,14 +365,20 @@ export class APIClient {
     this.interceptors();
   }
 
-  private initStorage(storage?: any) {
+  private initStorage(storage?: any, storageType = 'localStorage') {
     if (storage) {
       this.storage = new storage(this);
-    } else if (typeof localStorage !== 'undefined') {
-      this.storage = localStorage;
-    } else {
-      this.storage = new MemoryStorage();
+      return;
     }
+    if (storageType === 'localStorage' && typeof localStorage !== 'undefined') {
+      this.storage = localStorage;
+      return;
+    }
+    if (storageType === 'sessionStorage' && typeof sessionStorage !== 'undefined') {
+      this.storage = sessionStorage;
+      return;
+    }
+    this.storage = new MemoryStorage();
   }
 
   interceptors() {
@@ -339,7 +393,12 @@ export class APIClient {
     });
   }
 
-  request<T = any, R = AxiosResponse<T>, D = any>(config: AxiosRequestConfig<D> | ResourceActionOptions): Promise<R> {
+  request<T = any, R = AxiosResponse<T>, D = any>(
+    config: (AxiosRequestConfig<D> | ResourceActionOptions) & {
+      skipNotify?: boolean | ((error: any) => boolean);
+      skipAuth?: boolean;
+    },
+  ): Promise<R> {
     const { resource, resourceOf, action, params, headers } = config as any;
     if (resource) {
       return this.resource(resource, resourceOf, headers)[action](params);
@@ -347,7 +406,7 @@ export class APIClient {
     return this.axios.request<T, R, D>(config);
   }
 
-  resource(name: string, of?: any, headers?: AxiosRequestHeaders, cancel?: boolean): IResource {
+  resource(name: string, of?: any, headers?: RawAxiosRequestHeaders, cancel?: boolean): IResource {
     const target = {};
     const handler = {
       get: (_: any, actionName: string) => {
@@ -356,7 +415,7 @@ export class APIClient {
         }
 
         let url = name.split('.').join(`/${encodeURIComponent(of) || '_'}/`);
-        url += `:${actionName}`;
+        url += `:${actionName.toString()}`;
         const config: AxiosRequestConfig = { url };
         if (['get', 'list'].includes(actionName)) {
           config['method'] = 'get';

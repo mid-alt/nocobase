@@ -9,7 +9,7 @@
 
 import { ArrayField } from '@formily/core';
 import { useField, useFieldSchema } from '@formily/react';
-import { BlockProvider, FixedBlockWrapper, useBlockRequestContext, withDynamicSchemaProps } from '@nocobase/client';
+import { BlockProvider, useBlockRequestContext, withDynamicSchemaProps, useApp, useCollection } from '@nocobase/client';
 import React, { createContext, useContext, useEffect } from 'react';
 import { useCalendarBlockParams } from '../hooks/useCalendarBlockParams';
 
@@ -17,25 +17,26 @@ export const CalendarBlockContext = createContext<any>({});
 CalendarBlockContext.displayName = 'CalendarBlockContext';
 
 const InternalCalendarBlockProvider = (props) => {
-  const { fieldNames, showLunar } = props;
+  const { fieldNames, showLunar, defaultView, enableQuickCreateEvent, weekStart } = props;
   const field = useField();
   const { resource, service } = useBlockRequestContext();
 
   return (
-    <FixedBlockWrapper>
-      <CalendarBlockContext.Provider
-        value={{
-          field,
-          service,
-          resource,
-          fieldNames,
-          showLunar,
-          fixedBlock: field?.decoratorProps?.fixedBlock,
-        }}
-      >
-        {props.children}
-      </CalendarBlockContext.Provider>
-    </FixedBlockWrapper>
+    <CalendarBlockContext.Provider
+      value={{
+        field,
+        service,
+        resource,
+        fieldNames,
+        showLunar,
+        defaultView,
+        enableQuickCreateEvent: enableQuickCreateEvent ?? true,
+        fixedBlock: field?.decoratorProps?.fixedBlock,
+        weekStart,
+      }}
+    >
+      {props.children}
+    </CalendarBlockContext.Provider>
   );
 };
 
@@ -58,11 +59,12 @@ export const CalendarBlockProvider = withDynamicSchemaProps(
     if (parseVariableLoading) {
       return null;
     }
-
     return (
-      <BlockProvider name="calendar" {...props} params={params}>
-        <InternalCalendarBlockProvider {...props} />
-      </BlockProvider>
+      <div key={props.fieldNames.colorFieldName}>
+        <BlockProvider name="calendar" {...props} params={params}>
+          <InternalCalendarBlockProvider {...props} />
+        </BlockProvider>
+      </div>
     );
   },
   { displayName: 'CalendarBlockProvider' },
@@ -72,17 +74,42 @@ export const useCalendarBlockContext = () => {
   return useContext(CalendarBlockContext);
 };
 
+const useDefaultGetColor = () => {
+  return {
+    getFontColor(value) {
+      return null;
+    },
+    getBackgroundColor(value) {
+      return null;
+    },
+  };
+};
+
 export const useCalendarBlockProps = () => {
   const ctx = useCalendarBlockContext();
   const field = useField<ArrayField>();
+  const app = useApp();
+  const plugin = app.pm.get('calendar') as any;
+  const collection = useCollection();
+  const colorCollectionField = collection.getField(ctx.fieldNames.colorFieldName);
+  const pluginColorField = plugin.getColorFieldInterface(colorCollectionField?.interface) || {};
+  const useGetColor = pluginColorField.useGetColor || useDefaultGetColor;
+  const { getFontColor, getBackgroundColor } = useGetColor(colorCollectionField) || {};
+
   useEffect(() => {
     if (!ctx?.service?.loading) {
       field.componentProps.dataSource = ctx?.service?.data?.data;
     }
   }, [ctx?.service?.loading]);
+
   return {
     fieldNames: ctx.fieldNames,
     showLunar: ctx.showLunar,
+    defaultView: ctx.defaultView,
+    enableQuickCreateEvent: ctx.enableQuickCreateEvent,
     fixedBlock: ctx.fixedBlock,
+    getFontColor,
+    getBackgroundColor,
+    weekStart: ctx.weekStart,
   };
 };

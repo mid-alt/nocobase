@@ -25,7 +25,10 @@ export class BelongsToArrayField extends RelationField {
     if (!values || values[name] === undefined) {
       return;
     }
-    const value: any[] = values[name] || [];
+    let value: any[] = values[name] || [];
+    if (!Array.isArray(value)) {
+      value = [value];
+    }
     const tks = [];
     const items = [];
     for (const item of value) {
@@ -50,17 +53,6 @@ export class BelongsToArrayField extends RelationField {
     tks.push(...newInstances.map((instance: Model) => instance[targetKey]));
     model.set(foreignKey, tks);
   };
-
-  init() {
-    super.init();
-    const { name, ...opts } = this.options;
-    this.collection.model.associations[name] = new BelongsToArrayAssociation({
-      db: this.database,
-      source: this.collection.model,
-      as: name,
-      ...opts,
-    }) as any;
-  }
 
   checkTargetCollection() {
     const { target } = this.options;
@@ -112,6 +104,13 @@ export class BelongsToArrayField extends RelationField {
       return false;
     }
     this.checkAssociationKeys();
+    const { name, ...opts } = this.options;
+    this.collection.model.associations[name] = new BelongsToArrayAssociation({
+      db: this.database,
+      source: this.collection.model,
+      as: name,
+      ...opts,
+    }) as any;
     this.on('beforeSave', this.setForeignKeyArray);
   }
 

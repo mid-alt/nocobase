@@ -7,16 +7,13 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Collection } from '../collection';
-import { Database } from '../database';
-import { updateAssociations } from '../update-associations';
-import { mockDatabase } from './';
+import { Collection, createMockDatabase, Database, updateAssociations } from '@nocobase/database';
 
 describe('update associations', () => {
   describe('belongsTo', () => {
     let db: Database;
     beforeEach(async () => {
-      db = mockDatabase({});
+      db = await createMockDatabase({});
       await db.clean({
         drop: true,
       });
@@ -24,6 +21,88 @@ describe('update associations', () => {
 
     afterEach(async () => {
       await db.close();
+    });
+
+    it('should update has one association with foreign key', async () => {
+      const User = db.collection({
+        name: 'users',
+        fields: [
+          { type: 'string', name: 'name' },
+          { type: 'hasOne', name: 'profile', foreignKey: 'userId', target: 'profiles' },
+        ],
+      });
+
+      const Profile = db.collection({
+        name: 'profiles',
+        fields: [
+          { type: 'string', name: 'name' },
+          { type: 'bigInt', name: 'userId' },
+          { type: 'belongsTo', name: 'user', foreignKey: 'userId' },
+        ],
+      });
+
+      await db.sync();
+
+      // create user
+      const user = await User.repository.create({ values: { name: 'user1' } });
+      const profile = await Profile.repository.create({ values: { name: 'profile1' } });
+
+      const profileData = profile.toJSON();
+      await User.repository.update({
+        filterByTk: user.id,
+        values: {
+          profile: {
+            ...profileData,
+            userId: null,
+          },
+        },
+        updateAssociationValues: ['profile'],
+      });
+
+      const profile1 = await Profile.repository.findOne({ filterByTk: profile.id });
+      expect(profile1['userId']).toBe(user.id);
+    });
+
+    it('should update has many association with foreign key', async () => {
+      const User = db.collection({
+        name: 'users',
+        fields: [
+          { type: 'string', name: 'name' },
+          { type: 'hasMany', name: 'profiles', foreignKey: 'userId', target: 'profiles' },
+        ],
+      });
+
+      const Profile = db.collection({
+        name: 'profiles',
+        fields: [
+          { type: 'string', name: 'name' },
+          { type: 'bigInt', name: 'userId' },
+          { type: 'belongsTo', name: 'user', foreignKey: 'userId' },
+        ],
+      });
+
+      await db.sync();
+
+      // create user
+      const user = await User.repository.create({ values: { name: 'user1' } });
+      const profile = await Profile.repository.create({ values: { name: 'profile1' } });
+
+      const profileData = profile.toJSON();
+      await User.repository.update({
+        filterByTk: user.id,
+        values: {
+          profiles: [
+            {
+              ...profileData,
+              userId: null,
+            },
+          ],
+        },
+        updateAssociationValues: ['profiles'],
+      });
+
+      const profile1 = await Profile.repository.findOne({ filterByTk: profile.id });
+      expect(profile1['userId']).toBe(user.id);
     });
 
     test('update belongs to with foreign key and object', async () => {
@@ -222,7 +301,7 @@ describe('update associations', () => {
     let User: Collection;
     let Post: Collection;
     beforeEach(async () => {
-      db = mockDatabase();
+      db = await createMockDatabase();
       await db.clean({ drop: true });
       User = db.collection({
         name: 'users',
@@ -392,7 +471,7 @@ describe('update associations', () => {
     let Comment: Collection;
 
     beforeEach(async () => {
-      db = mockDatabase();
+      db = await createMockDatabase();
       await db.clean({ drop: true });
       User = db.collection({
         name: 'users',
@@ -510,7 +589,7 @@ describe('update associations', () => {
     let PostTag: Collection;
 
     beforeEach(async () => {
-      db = mockDatabase();
+      db = await createMockDatabase();
       await db.clean({ drop: true });
       PostTag = db.collection({
         name: 'posts_tags',
@@ -559,6 +638,88 @@ describe('update associations', () => {
         },
       });
       expect(count).toEqual(1);
+    });
+
+    test('should update belongsToMany association not throw error when relation table field is uuid', async () => {
+      const TeacherStudent = db.collection({
+        name: 'teacher_student',
+        fields: [{ type: 'uuid', name: 'uid', primaryKey: true, autoGenId: true }],
+      });
+      const Student = db.collection({
+        name: 'students',
+        fields: [
+          { type: 'string', name: 'name' },
+          {
+            type: 'belongsToMany',
+            name: 'teachers',
+            through: 'teacher_student',
+          },
+        ],
+      });
+      const Teacher = db.collection({
+        name: 'teachers',
+        fields: [
+          { type: 'string', name: 'name' },
+          {
+            type: 'belongsToMany',
+            name: 'students',
+            through: 'teacher_student',
+          },
+        ],
+      });
+      await db.sync();
+
+      const student = await Student.repository.create({
+        values: { name: 'student1' },
+      });
+      const teacher = await Teacher.repository.create({
+        values: {
+          name: 'teacher1',
+          students: [{ id: student.id }],
+        },
+      });
+      assert.ok(teacher);
+    });
+
+    test('should update belongsToMany association not throw error when relation table field is nanoid', async () => {
+      const TeacherStudent = db.collection({
+        name: 'teacher_student',
+        fields: [{ type: 'nanoid', name: 'uid', primaryKey: true, autoGenId: true }],
+      });
+      const Student = db.collection({
+        name: 'students',
+        fields: [
+          { type: 'string', name: 'name' },
+          {
+            type: 'belongsToMany',
+            name: 'teachers',
+            through: 'teacher_student',
+          },
+        ],
+      });
+      const Teacher = db.collection({
+        name: 'teachers',
+        fields: [
+          { type: 'string', name: 'name' },
+          {
+            type: 'belongsToMany',
+            name: 'students',
+            through: 'teacher_student',
+          },
+        ],
+      });
+      await db.sync();
+
+      const student = await Student.repository.create({
+        values: { name: 'student1' },
+      });
+      const teacher = await Teacher.repository.create({
+        values: {
+          name: 'teacher1',
+          students: [{ id: student.id }],
+        },
+      });
+      assert.ok(teacher);
     });
   });
 });

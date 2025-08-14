@@ -18,8 +18,7 @@ describe('IconPicker', () => {
     const button = container.querySelector('button') as HTMLButtonElement;
     await userEvent.click(button);
 
-    expect(screen.getByText('Icon')).toHaveTextContent(`Icon`);
-    expect(screen.queryAllByRole('img').length).toBe(422);
+    expect(screen.queryAllByRole('img').length).toBe(448);
   });
 
   it('should display the selected icon', async () => {
@@ -51,13 +50,13 @@ describe('IconPicker', () => {
 
     const searchInput = screen.queryByRole('search') as HTMLInputElement;
     await waitFor(() => expect(searchInput).toBeInTheDocument());
-    expect(screen.queryAllByRole('img').length).toBe(422);
+    expect(screen.queryAllByRole('img').length).toBe(448);
     await userEvent.type(searchInput, 'left');
-    await waitFor(() => expect(screen.queryAllByRole('img').length).toBeLessThan(422));
+    await waitFor(() => expect(screen.queryAllByRole('img').length).toBeLessThan(448));
     await userEvent.clear(searchInput);
     await userEvent.type(searchInput, 'abcd');
     await waitFor(() => {
-      expect(screen.getByText('No data')).toBeInTheDocument();
+      expect(screen.getAllByText('No data')).toHaveLength(2);
     });
   });
 });

@@ -13,10 +13,13 @@ import {
   SchemaSettingsActionLinkItem,
   useSchemaInitializer,
   useSchemaInitializerItem,
+  ModalActionSchemaInitializerItem,
+  SchemaSettingAccessControl,
+  SchemaSettingsLinkageRules,
+  useSchemaToolbar,
 } from '@nocobase/client';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ModalActionSchemaInitializerItem } from './ModalActionSchemaInitializerItem';
 
 export const workbenchActionSettingsLink = new SchemaSettings({
   name: 'workbench:actionSettings:link',
@@ -29,8 +32,24 @@ export const workbenchActionSettingsLink = new SchemaSettings({
       },
     },
     {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
       name: 'editLink',
       Component: SchemaSettingsActionLinkItem,
+    },
+    {
+      ...SchemaSettingAccessControl,
+      useVisible() {
+        return true;
+      },
     },
     {
       sort: 800,

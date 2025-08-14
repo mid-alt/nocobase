@@ -22,6 +22,7 @@ import { Collection, CollectionFieldOptions } from '../../data-source/collection
 import { useCompile } from '../../schema-component';
 import { useSchemaTemplateManager } from '../../schema-templates';
 import { useCollectionDataSourceItems } from '../utils';
+import { useTemplateBlockNotifier } from '../hooks/useTemplateBlockNotifier';
 
 const MENU_ITEM_HEIGHT = 32;
 const STEP = 15;
@@ -306,6 +307,7 @@ export interface DataBlockInitializerProps {
   /** 用于更改 Other records 的文案 */
   otherText?: string;
   children?: React.ReactNode;
+  alwaysRenderMenu?: boolean; //总是渲染为 SchemaInitializerMenu
 }
 
 export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
@@ -328,12 +330,21 @@ export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
     filterOtherRecordsCollection,
     currentText,
     otherText,
+    alwaysRenderMenu,
   } = props;
   const { insert, setVisible } = useSchemaInitializer();
   const compile = useCompile();
   const { getTemplateSchemaByMode } = useSchemaTemplateManager();
+  const templateBlockAddedNotifier = useTemplateBlockNotifier();
+
   const onClick = useCallback(
     async (options) => {
+      templateBlockAddedNotifier({
+        collection: options.item.name,
+        dataSource: options.item.dataSource,
+        componentType: componentType,
+        menuName: name,
+      });
       const { item, fromOthersInPopup } = options;
 
       if (propsOnClick) {
@@ -343,6 +354,8 @@ export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
       if (item.template) {
         const s = await getTemplateSchemaByMode(item);
         templateWrap ? insert(templateWrap(s, { item, fromOthersInPopup })) : insert(s);
+      } else if (item.schemaInsertor) {
+        await item.schemaInsertor(insert, { item, name, fromOthersInPopup });
       } else {
         if (onCreateBlockSchema) {
           onCreateBlockSchema({ item, fromOthersInPopup });
@@ -351,7 +364,17 @@ export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
 
       setVisible(false);
     },
-    [getTemplateSchemaByMode, insert, setVisible, onCreateBlockSchema, propsOnClick, templateWrap],
+    [
+      getTemplateSchemaByMode,
+      insert,
+      setVisible,
+      onCreateBlockSchema,
+      propsOnClick,
+      templateWrap,
+      templateBlockAddedNotifier,
+      name,
+      componentType,
+    ],
   );
   const items =
     itemsFromProps ||
@@ -395,10 +418,10 @@ export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
         },
         children,
       },
-    ];
+    ] as MenuProps['items'];
   }, [searchedChildren, hideChildrenIfSingleCollection, name, compile, title, icon, onClick, props]);
 
-  if (childItems.length > 1 || (childItems.length === 1 && childItems[0].children?.length > 0)) {
+  if (childItems.length > 1 || (childItems.length === 1 && childItems[0]?.children?.length > 0) || alwaysRenderMenu) {
     return (
       <SchemaInitializerMenu
         onOpenChange={(keys) => {

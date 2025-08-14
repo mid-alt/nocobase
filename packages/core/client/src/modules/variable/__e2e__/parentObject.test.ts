@@ -37,7 +37,7 @@ test.describe('variable: parent object', () => {
     await page.getByRole('button', { name: 'OK' }).click();
 
     // 3. 当更改当前表单中的 text1 字段后，text2 和 text3 字段应该也会被自动更改
-    await page.getByRole('button', { name: 'Add new' }).click();
+    await page.locator('.nb-sub-table-addNew').click();
     await page
       .getByLabel('block-item-CollectionField-collection1-form-collection1.text1-text1')
       .getByRole('textbox')
@@ -55,6 +55,7 @@ test.describe('variable: parent object', () => {
 
     // 1. Use "Current form" and "Parent object" variables in nested subforms and subtables
     await page.getByLabel('block-item-CollectionField-collection1-form-collection1.m2m1-m2m1').hover();
+    await page.getByRole('menuitem', { name: 'Linkage rules' }).waitFor({ state: 'detached' });
     await page
       .getByLabel('designer-schema-settings-CollectionField-fieldSettings:FormItem-collection1-collection1.m2m1', {
         exact: true,
@@ -95,7 +96,7 @@ test.describe('variable: parent object', () => {
     await page.getByRole('button', { name: 'OK' }).click();
 
     // 2. Assert: When the text1 field in the current form is changed, the text2 and text3 fields should also be automatically changed
-    await page.getByRole('button', { name: 'Add new' }).click();
+    await page.locator('.nb-sub-table-addNew').click();
     await page
       .getByLabel('block-item-CollectionField-collection1-form-collection1.text1-text1')
       .getByRole('textbox')
@@ -110,7 +111,7 @@ test.describe('variable: parent object', () => {
 
     // 3. Test if the "Current object" variable can be used normally in the subform
     await page.getByLabel('schema-initializer-Grid-form:configureFields-collection2').hover();
-    await page.getByRole('menuitem', { name: 'form Add text' }).click();
+    await page.getByRole('menuitem', { name: 'form Add Markdown' }).click();
     await page.getByLabel('block-item-Markdown.Void-').hover();
     await page.getByLabel('designer-schema-settings-Markdown.Void-blockSettings:markdown-collection2').hover();
     await page.getByRole('menuitem', { name: 'Edit markdown' }).click();

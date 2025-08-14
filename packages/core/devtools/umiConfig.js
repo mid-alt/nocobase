@@ -8,7 +8,7 @@ const path = require('path');
 console.log('VERSION: ', packageJson.version);
 
 function getUmiConfig() {
-  const { APP_PORT, API_BASE_URL, API_CLIENT_STORAGE_PREFIX, APP_PUBLIC_PATH } = process.env;
+  const { APP_PORT, API_BASE_URL, API_CLIENT_STORAGE_TYPE, API_CLIENT_STORAGE_PREFIX, APP_PUBLIC_PATH } = process.env;
   const API_BASE_PATH = process.env.API_BASE_PATH || '/api/';
   const PROXY_TARGET_URL = process.env.PROXY_TARGET_URL || `http://127.0.0.1:${APP_PORT}`;
   const LOCAL_STORAGE_BASE_URL = 'storage/uploads/';
@@ -41,6 +41,7 @@ function getUmiConfig() {
       'process.env.WS_PATH': process.env.WS_PATH,
       'process.env.API_BASE_URL': API_BASE_URL || API_BASE_PATH,
       'process.env.API_CLIENT_STORAGE_PREFIX': API_CLIENT_STORAGE_PREFIX,
+      'process.env.API_CLIENT_STORAGE_TYPE': API_CLIENT_STORAGE_TYPE,
       'process.env.APP_ENV': process.env.APP_ENV,
       'process.env.VERSION': packageJson.version,
       'process.env.WEBSOCKET_URL': process.env.WEBSOCKET_URL,
@@ -53,6 +54,20 @@ function getUmiConfig() {
         target: PROXY_TARGET_URL,
         changeOrigin: true,
         pathRewrite: { [`^${API_BASE_PATH}`]: API_BASE_PATH },
+        onProxyRes(proxyRes, req, res) {
+          if (req.headers.accept === 'text/event-stream') {
+            res.writeHead(res.statusCode, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-transform',
+              Connection: 'keep-alive',
+            });
+          }
+        },
+        onProxyReq: (proxyReq, req, res) => {
+          if (req?.ip) {
+            proxyReq.setHeader('X-Forwarded-For', req.ip);
+          }
+        },
       },
       // for local storage
       ...getLocalStorageProxy(),
@@ -137,14 +152,14 @@ class IndexGenerator {
   generate() {
     this.generatePluginContent();
     if (process.env.NODE_ENV === 'production') return;
-    this.pluginsPath.forEach((pluginPath) => {
-      if (!fs.existsSync(pluginPath)) {
-        return;
-      }
-      fs.watch(pluginPath, { recursive: false }, () => {
-        this.generatePluginContent();
-      });
-    });
+    // this.pluginsPath.forEach((pluginPath) => {
+    //   if (!fs.existsSync(pluginPath)) {
+    //     return;
+    //   }
+    //   fs.watch(pluginPath, { recursive: false }, () => {
+    //     this.generatePluginContent();
+    //   });
+    // });
   }
 
   get indexContent() {
@@ -156,7 +171,11 @@ function devDynamicImport(packageName: string): Promise<any> {
   if (!fileName) {
     return Promise.resolve(null);
   }
-  return import(\`./packages/\${fileName}\`)
+  try {
+    return import(\`./packages/\${fileName}\`)
+  } catch (error) {
+    return Promise.resolve(null);
+  }
 }
 export default devDynamicImport;`;
   }
@@ -170,9 +189,9 @@ export default function devDynamicImport(packageName: string): Promise<any> {
 
   generatePluginContent() {
     if (fs.existsSync(this.outputPath)) {
-      fs.rmdirSync(this.outputPath, { recursive: true, force: true });
+      fs.rmSync(this.outputPath, { recursive: true, force: true });
     }
-    fs.mkdirSync(this.outputPath);
+    fs.mkdirSync(this.outputPath, { recursive: true, force: true });
     const validPluginPaths = this.pluginsPath.filter((pluginsPath) => fs.existsSync(pluginsPath));
     if (!validPluginPaths.length || process.env.NODE_ENV === 'production') {
       fs.writeFileSync(this.indexPath, this.emptyIndexContent);
@@ -247,3 +266,13 @@ export default function devDynamicImport(packageName: string): Promise<any> {
 exports.getUmiConfig = getUmiConfig;
 exports.resolveNocobasePackagesAlias = resolveNocobasePackagesAlias;
 exports.IndexGenerator = IndexGenerator;
+
+exports.generatePlugins = function () {
+  const pluginDirs = (process.env.PLUGIN_PATH || 'packages/plugins/,packages/samples/,packages/pro-plugins/')
+    .split(',')
+    .map((item) => path.join(process.cwd(), item));
+
+  const outputPluginPath = path.join(process.env.APP_PACKAGE_ROOT, 'client', 'src', '.plugins');
+  const indexGenerator = new IndexGenerator(outputPluginPath, pluginDirs);
+  indexGenerator.generate();
+};

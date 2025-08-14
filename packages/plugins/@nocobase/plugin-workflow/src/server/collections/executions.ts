@@ -9,38 +9,6 @@
 
 import { CollectionOptions } from '@nocobase/database';
 
-export default {
-  dumpRules: {
-    group: 'log',
-  },
-  name: 'executions',
-  shared: true,
-  fields: [
-    {
-      type: 'belongsTo',
-      name: 'workflow',
-    },
-    {
-      type: 'string',
-      name: 'key',
-    },
-    {
-      type: 'string',
-      name: 'eventKey',
-      unique: true,
-    },
-    {
-      type: 'hasMany',
-      name: 'jobs',
-      onDelete: 'CASCADE',
-    },
-    {
-      type: 'json',
-      name: 'context',
-    },
-    {
-      type: 'integer',
-      name: 'status',
-    },
-  ],
-} as CollectionOptions;
+import options from '../../common/collections/executions';
+
+export default options as CollectionOptions;

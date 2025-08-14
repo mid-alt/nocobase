@@ -17,15 +17,13 @@ import {
   useCollection_deprecated,
   useDataSourceKey,
   useDesignable,
-  useRequest,
+  SchemaSettingAccessControl,
 } from '@nocobase/client';
-import { App } from 'antd';
-import React from 'react';
-import { listByCurrentRoleUrl } from '../constants';
+import React, { useMemo } from 'react';
 import { useCustomRequestVariableOptions, useGetCustomRequest } from '../hooks';
 import { useCustomRequestsResource } from '../hooks/useCustomRequestsResource';
 import { useTranslation } from '../locale';
-import { CustomRequestACLSchema, CustomRequestConfigurationFieldsSchema } from '../schemas';
+import { CustomRequestConfigurationFieldsSchema } from '../schemas';
 
 export function CustomRequestSettingsItem() {
   const { t } = useTranslation();
@@ -33,9 +31,15 @@ export function CustomRequestSettingsItem() {
   const dataSourceKey = useDataSourceKey();
   const fieldSchema = useFieldSchema();
   const customRequestsResource = useCustomRequestsResource();
-  const { message } = App.useApp();
   const { data, refresh } = useGetCustomRequest();
   const { dn } = useDesignable();
+  const initialValues = useMemo(() => {
+    const values = { ...data?.data?.options };
+    if (values.data && typeof values.data !== 'string') {
+      values.data = JSON.stringify(values.data, null, 2);
+    }
+    return values;
+  }, [data?.data?.options]);
   return (
     <>
       <SchemaSettingsActionModalItem
@@ -46,12 +50,13 @@ export function CustomRequestSettingsItem() {
         beforeOpen={() => !data && refresh()}
         scope={{ useCustomRequestVariableOptions }}
         schema={CustomRequestConfigurationFieldsSchema}
-        initialValues={{
-          ...data?.data?.options,
-        }}
+        initialValues={initialValues}
         onSubmit={async (config) => {
           const { ...requestSettings } = config;
           fieldSchema['x-response-type'] = requestSettings.responseType;
+          const isSelfRequest =
+            !fieldSchema['x-custom-request-id'] || fieldSchema['x-custom-request-id'] === fieldSchema['x-uid'];
+
           await customRequestsResource.updateOrCreate({
             values: {
               key: fieldSchema['x-uid'],
@@ -63,56 +68,19 @@ export function CustomRequestSettingsItem() {
             },
             filterKeys: ['key'],
           });
-          dn.emit('patch', {
-            schema: {
-              'x-response-type': requestSettings.responseType,
-              'x-uid': fieldSchema['x-uid'],
-            },
+          const schema = {
+            'x-response-type': requestSettings.responseType,
+            'x-uid': fieldSchema['x-uid'],
+          };
+          if (!isSelfRequest && fieldSchema['x-custom-request-id']) {
+            schema['x-custom-request-id'] = fieldSchema['x-uid'];
+            fieldSchema['x-custom-request-id'] = fieldSchema['x-uid'];
+          }
+          await dn.emit('patch', {
+            schema,
           });
+          dn.refresh();
           refresh();
-          message.success(t('Saved successfully'));
-        }}
-      />
-    </>
-  );
-}
-
-export function CustomRequestACL() {
-  const { t } = useTranslation();
-  const fieldSchema = useFieldSchema();
-  const customRequestsResource = useCustomRequestsResource();
-  const { message } = App.useApp();
-  const { data, refresh } = useGetCustomRequest();
-  const { refresh: refreshRoleCustomKeys } = useRequest<{ data: string[] }>(
-    {
-      url: listByCurrentRoleUrl,
-    },
-    {
-      manual: true,
-      cacheKey: listByCurrentRoleUrl,
-    },
-  );
-
-  return (
-    <>
-      <SchemaSettingsActionModalItem
-        title={t('Access control')}
-        schema={CustomRequestACLSchema}
-        initialValues={{
-          roles: data?.data?.roles,
-        }}
-        beforeOpen={() => !data && refresh()}
-        onSubmit={async ({ roles }) => {
-          await customRequestsResource.updateOrCreate({
-            values: {
-              key: fieldSchema['x-uid'],
-              roles,
-            },
-            filterKeys: ['key'],
-          });
-          refresh();
-          refreshRoleCustomKeys();
-          return message.success(t('Saved successfully'));
         }}
       />
     </>
@@ -133,10 +101,7 @@ export const customRequestActionSettings = new SchemaSettings({
           name: 'request settings',
           Component: CustomRequestSettingsItem,
         },
-        {
-          name: 'accessControl',
-          Component: CustomRequestACL,
-        },
+        SchemaSettingAccessControl,
       ],
     },
   ],

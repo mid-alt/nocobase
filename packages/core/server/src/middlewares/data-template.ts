@@ -10,19 +10,19 @@
 import { Context } from '@nocobase/actions';
 import { Collection } from '@nocobase/database';
 
-export const dataTemplate = async (ctx: Context, next) => {
+export async function dataTemplate(ctx: Context, next) {
   const { resourceName, actionName } = ctx.action;
-  const { isTemplate, fields } = ctx.action.params;
+  const { isTemplate, fields, appends } = ctx.action.params;
 
   await next();
 
-  if (isTemplate && actionName === 'get' && fields.length > 0) {
+  if (isTemplate && actionName === 'get') {
     ctx.body = traverseJSON(JSON.parse(JSON.stringify(ctx.body)), {
-      collection: ctx.db.getCollection(resourceName),
-      include: fields,
+      collection: ctx.getCurrentRepository().collection,
+      include: [...(fields || []), ...(appends || [])],
     });
   }
-};
+}
 
 type TraverseOptions = {
   collection: Collection;
@@ -30,13 +30,14 @@ type TraverseOptions = {
   include?: string[];
   through?: string;
   excludePk?: boolean;
+  isHasManyField?: boolean;
 };
 
 const traverseHasMany = (arr: any[], { collection, exclude = [], include = [] }: TraverseOptions) => {
   if (!arr) {
     return arr;
   }
-  return arr.map((item) => traverseJSON(item, { collection, exclude, include }));
+  return arr.map((item) => traverseJSON(item, { collection, exclude, include, isHasManyField: true }));
 };
 
 const traverseBelongsToMany = (arr: any[], { collection, exclude = [], through }: TraverseOptions) => {
@@ -75,6 +76,7 @@ const traverseJSON = (data, options: TraverseOptions) => {
   if (!data) {
     return data;
   }
+
   const { collection, exclude = [], include = [], excludePk = true } = options;
   const map = parseInclude(include);
   const result = {};
@@ -94,15 +96,23 @@ const traverseJSON = (data, options: TraverseOptions) => {
       result[key] = data[key];
       continue;
     }
-    if (field.options.primaryKey && excludePk) {
+
+    if (field.options.primaryKey && excludePk && !collection.isMultiFilterTargetKey()) {
       continue;
     }
+
     if (field.options.isForeignKey) {
       continue;
     }
-    if (['sort', 'password', 'sequence'].includes(field.type)) {
+
+    if (!options.isHasManyField && ['sort'].includes(field.type)) {
       continue;
     }
+
+    if (['password', 'sequence'].includes(field.type)) {
+      continue;
+    }
+
     if (field.type === 'hasOne') {
       result[key] = traverseJSON(data[key], {
         collection: collection.db.getCollection(field.target),

@@ -80,25 +80,37 @@ export const requestSettingsSchema: ISchema = {
   },
 };
 
-export const linkageAction = async ({
-  operator,
-  field,
-  condition,
-  variables,
-  localVariables,
-}: {
-  operator;
-  field;
-  condition;
-  variables: VariablesContextType;
-  localVariables: VariableOption[];
-}) => {
+export const linkageAction = async (
+  {
+    operator,
+    field,
+    condition,
+    variables,
+    localVariables,
+    conditionType,
+    variableNameOfLeftCondition,
+  }: {
+    operator;
+    field;
+    condition;
+    variables: VariablesContextType;
+    localVariables: VariableOption[];
+    conditionType: 'advanced' | 'basic';
+    variableNameOfLeftCondition?: string;
+  },
+  jsonLogic: any,
+) => {
   const disableResult = field?.stateOfLinkageRules?.disabled || [false];
   const displayResult = field?.stateOfLinkageRules?.display || ['visible'];
 
   switch (operator) {
     case ActionType.Visible:
-      if (await conditionAnalyses({ ruleGroup: condition, variables, localVariables })) {
+      if (
+        await conditionAnalyses(
+          { ruleGroup: condition, variables, localVariables, conditionType, variableNameOfLeftCondition },
+          jsonLogic,
+        )
+      ) {
         displayResult.push(operator);
         field.data = field.data || {};
         field.data.hidden = false;
@@ -110,7 +122,12 @@ export const linkageAction = async ({
       field.display = last(displayResult);
       break;
     case ActionType.Hidden:
-      if (await conditionAnalyses({ ruleGroup: condition, variables, localVariables })) {
+      if (
+        await conditionAnalyses(
+          { ruleGroup: condition, variables, localVariables, conditionType, variableNameOfLeftCondition },
+          jsonLogic,
+        )
+      ) {
         field.data = field.data || {};
         field.data.hidden = true;
       } else {
@@ -119,7 +136,12 @@ export const linkageAction = async ({
       }
       break;
     case ActionType.Disabled:
-      if (await conditionAnalyses({ ruleGroup: condition, variables, localVariables })) {
+      if (
+        await conditionAnalyses(
+          { ruleGroup: condition, variables, localVariables, conditionType, variableNameOfLeftCondition },
+          jsonLogic,
+        )
+      ) {
         disableResult.push(true);
       }
       field.stateOfLinkageRules = {
@@ -130,10 +152,15 @@ export const linkageAction = async ({
       field.componentProps['disabled'] = last(disableResult);
       break;
     case ActionType.Active:
-      if (await conditionAnalyses({ ruleGroup: condition, variables, localVariables })) {
+      if (
+        await conditionAnalyses(
+          { ruleGroup: condition, variables, localVariables, conditionType, variableNameOfLeftCondition },
+          jsonLogic,
+        )
+      ) {
         disableResult.push(false);
       } else {
-        disableResult.push(field.disabled);
+        disableResult.push(!!field.componentProps?.['disabled']);
       }
       field.stateOfLinkageRules = {
         ...field.stateOfLinkageRules,

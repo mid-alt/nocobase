@@ -83,13 +83,13 @@ export const useRemoveGridFormItem = () => {
   };
 };
 
-export const findTableColumn = (schema: Schema, key: string, action: string, deepth = 0) => {
+export const findTableColumn = (schema: Schema, key: string, action: string, name: string) => {
   return schema.reduceProperties((buf, s) => {
-    if (s[key] === action) {
+    if (s[key] === action && (!name || s.name === name)) {
       return s;
     }
     const c = s.reduceProperties((buf, s) => {
-      if (s[key] === action) {
+      if (s[key] === action && (!name || s.name === name)) {
         return s;
       }
       return buf;
@@ -110,6 +110,7 @@ const quickEditField = [
   'circle',
   'point',
   'lineString',
+  'vditor',
 ];
 
 export function useTableColumnInitializerFields() {
@@ -121,6 +122,7 @@ export function useTableColumnInitializerFields() {
   const isReadPretty = isSubTable ? form.readPretty : true;
 
   return currentFields
+    .filter((v) => !v.collectionName || v.collectionName === name)
     .filter((field) => field?.interface && field?.interface !== 'subTable' && !field?.treeChildren)
     .map((field) => {
       const interfaceConfig = getInterface(field.interface);
@@ -176,7 +178,7 @@ export function useTableColumnInitializerFields() {
 }
 
 export function useAssociatedTableColumnInitializerFields() {
-  const { name, fields } = useCollection_deprecated();
+  const { fields } = useCollection_deprecated();
   const { t } = useTranslation();
   const { getInterface, getCollectionFields, getCollection } = useCollectionManager_deprecated();
   const groups = fields
@@ -238,6 +240,7 @@ function getGroupItemForTable({
 
       return {
         type: 'item',
+        key: `${field.target}_${subField.name}_${newSchemaName}`,
         name: newSchemaName,
         title: subField?.uiSchema?.title || subField.name,
         Component: 'TableCollectionFieldInitializer',
@@ -258,6 +261,7 @@ function getGroupItemForTable({
 
   const displayCollectionFields = {
     type: 'itemGroup',
+    key: `${field.target}_${schemaName}_displayFields`,
     name: `${schemaName}-displayCollectionFields`,
     title: t('Display fields'),
     children: items,
@@ -286,6 +290,7 @@ function getGroupItemForTable({
     if (subChildren.length) {
       const group: any = {
         type: 'itemGroup',
+        key: `${field.target}_${schemaName}_associationFields`,
         name: `${schemaName}-associationFields`,
         title: t('Display association fields'),
         children: subChildren,
@@ -297,7 +302,8 @@ function getGroupItemForTable({
 
   return {
     type: 'subMenu',
-    name: `${schemaName}`,
+    key: `${field.target}_${schemaName}_submenu`,
+    name: schemaName,
     title: field.uiSchema?.title,
     children,
   } as SchemaInitializerItemType;
@@ -379,6 +385,7 @@ export const useFormItemInitializerFields = (options?: any) => {
   const action = fieldSchema?.['x-action'];
 
   return currentFields
+    .filter((v) => !v.collectionName || v.collectionName === name)
     ?.filter((field) => field?.interface && !field?.treeChildren)
     ?.map((field) => {
       const interfaceConfig = getInterface(field.interface);
@@ -446,6 +453,7 @@ export const useFilterFormItemInitializerFields = (options?: any) => {
   const action = fieldSchema?.['x-action'];
 
   return currentFields
+    .filter((v) => !v.collectionName || v.collectionName === name)
     ?.filter((field) => field?.interface && getInterface(field.interface)?.filterable)
     ?.map((field) => {
       const interfaceConfig = getInterface(field.interface);
@@ -462,7 +470,7 @@ export const useFilterFormItemInitializerFields = (options?: any) => {
         'x-use-decorator-props': 'useFormItemProps',
         'x-collection-field': `${name}.${field.name}`,
         'x-component-props': {
-          component: interfaceConfig?.filterable?.operators?.[0]?.schema?.['x-component'],
+          utc: false,
         },
       };
       if (isAssocField(field)) {
@@ -477,7 +485,7 @@ export const useFilterFormItemInitializerFields = (options?: any) => {
           'x-decorator': 'FormItem',
           'x-use-decorator-props': 'useFormItemProps',
           'x-collection-field': `${name}.${field.name}`,
-          'x-component-props': field.uiSchema?.['x-component-props'],
+          'x-component-props': { ...field.uiSchema?.['x-component-props'], utc: false },
         };
       }
       const resultItem = {
@@ -508,7 +516,8 @@ export const useAssociatedFormItemInitializerFields = (options?: any) => {
   const form = useForm();
   const { t } = useTranslation();
   const { readPretty = form.readPretty, block = 'Form' } = options || {};
-  const interfaces = block === 'Form' ? ['m2o'] : ['o2o', 'oho', 'obo', 'm2o'];
+  const interfaces = block === 'Form' ? ['m2o', 'obo', 'oho'] : ['o2o', 'oho', 'obo', 'm2o'];
+
   const groups = fields
     ?.filter((field) => {
       return interfaces.includes(field.interface);
@@ -571,6 +580,7 @@ const associationFieldToMenu = (
       interface: field.interface,
     },
     'x-component': 'CollectionField',
+    'x-component-props': { utc: false },
     'x-read-pretty': false,
     'x-decorator': 'FormItem',
     'x-collection-field': `${collectionName}.${schemaName}`,
@@ -590,8 +600,9 @@ const associationFieldToMenu = (
 export const useFilterAssociatedFormItemInitializerFields = () => {
   const { name, fields } = useCollection_deprecated();
   const { getCollectionFields } = useCollectionManager_deprecated();
+  const excludedInterfaces = ['attachmentURL'];
   return fields
-    ?.filter((field) => field.target && field.uiSchema)
+    ?.filter((field) => field.target && field.uiSchema && !excludedInterfaces.includes(field.interface))
     .map((field) => associationFieldToMenu(field, field.name, name, getCollectionFields, []))
     .filter(Boolean);
 };
@@ -686,7 +697,7 @@ export const useFilterInheritsFormItemInitializerFields = (options?) => {
             'x-component': 'CollectionField',
             'x-decorator': 'FormItem',
             'x-collection-field': `${name}.${field.name}`,
-            'x-component-props': {},
+            'x-component-props': { utc: false },
             'x-read-pretty': field?.uiSchema?.['x-read-pretty'],
           };
           return {
@@ -717,14 +728,13 @@ export const useCustomFormItemInitializerFields = (options?: any) => {
   const remove = useRemoveGridFormItem();
   return currentFields
     ?.filter((field) => {
-      return field?.interface && field.interface !== 'snapshot' && field.type !== 'sequence';
+      return !field.inherit && field?.interface && field.interface !== 'snapshot' && field.type !== 'sequence';
     })
     ?.map((field) => {
       const interfaceConfig = getInterface(field.interface);
       const schema = {
         type: 'string',
         name: field.name,
-        title: field?.uiSchema?.title || field.name,
         // 'x-designer': 'FormItem.Designer',
         'x-toolbar': 'FormItemSchemaToolbar',
         'x-settings': 'fieldSettings:FormItem',
@@ -757,7 +767,7 @@ export const findSchema = (schema: Schema, key: string, action: string, name?: s
     if (s[key] === action && (!name || s.name === name)) {
       return s;
     }
-    if (s['x-component'] !== 'Action.Container' && !s['x-component'].includes('AssociationField')) {
+    if (s['x-component'] && s['x-component'] !== 'Action.Container' && !s['x-component'].includes('AssociationField')) {
       const c = findSchema(s, key, action, name);
       if (c) {
         return c;
@@ -827,10 +837,71 @@ export const useRecordCollectionDataSourceItems = (
     .filter((template) => {
       return ['FormItem', 'ReadPrettyFormItem'].includes(componentName) || template.resourceName === resourceName;
     });
-  if (!templates.length) {
+  const inheritedTemplatesMenuItems = Array.from(initializerMenusGenerators.values())
+    .map((generator) => generator({ collection, componentName }))
+    .filter(Boolean)
+    .flat();
+  if ((!templates.length && !inheritedTemplatesMenuItems.length) || isInTemplateSettingPage()) {
     return [];
   }
   const index = 0;
+  const allTemplatesMenuItems: SchemaInitializerItemType[] = [
+    {
+      type: 'divider',
+      name: 'divider',
+    },
+  ];
+  if (templates.length) {
+    allTemplatesMenuItems.push(
+      {
+        key: `${collectionName || componentName}_table_subMenu_${index}_copy`,
+        type: 'subMenu',
+        name: 'copy',
+        title: t('Duplicate template'),
+        children: templates.map((template) => {
+          const templateName = ['FormItem', 'ReadPrettyFormItem'].includes(template?.componentName)
+            ? `${template?.name} ${t('(Fields only)')}`
+            : template?.name;
+          return {
+            type: 'item',
+            mode: 'copy',
+            name: collection.name,
+            template,
+            item,
+            title: templateName || t('Untitled'),
+          };
+        }),
+      },
+      {
+        key: `${collectionName || componentName}_table_subMenu_${index}_ref`,
+        type: 'subMenu',
+        name: 'ref',
+        title: t('Reference template'),
+        children: templates.map((template) => {
+          const templateName = ['FormItem', 'ReadPrettyFormItem'].includes(template?.componentName)
+            ? `${template?.name} ${t('(Fields only)')}`
+            : template?.name;
+          return {
+            type: 'item',
+            mode: 'reference',
+            name: collection.name,
+            template,
+            item,
+            title: templateName || t('Untitled'),
+          };
+        }),
+      },
+    );
+  }
+  if (inheritedTemplatesMenuItems.length) {
+    allTemplatesMenuItems.push({
+      type: 'subMenu',
+      name: 'inherited_templates',
+      key: `associationFiled_${componentName}_table_subMenu_${index}_inherited`,
+      title: t('Inherited template'),
+      children: inheritedTemplatesMenuItems,
+    });
+  }
   return [
     {
       key: `${collectionName || componentName}_table_blank`,
@@ -839,47 +910,7 @@ export const useRecordCollectionDataSourceItems = (
       title: t('Blank block'),
       item,
     },
-    {
-      type: 'divider',
-    },
-    {
-      key: `${collectionName || componentName}_table_subMenu_${index}_copy`,
-      type: 'subMenu',
-      name: 'copy',
-      title: t('Duplicate template'),
-      children: templates.map((template) => {
-        const templateName = ['FormItem', 'ReadPrettyFormItem'].includes(template?.componentName)
-          ? `${template?.name} ${t('(Fields only)')}`
-          : template?.name;
-        return {
-          type: 'item',
-          mode: 'copy',
-          name: collection.name,
-          template,
-          item,
-          title: templateName || t('Untitled'),
-        };
-      }),
-    },
-    {
-      key: `${collectionName || componentName}_table_subMenu_${index}_ref`,
-      type: 'subMenu',
-      name: 'ref',
-      title: t('Reference template'),
-      children: templates.map((template) => {
-        const templateName = ['FormItem', 'ReadPrettyFormItem'].includes(template?.componentName)
-          ? `${template?.name} ${t('(Fields only)')}`
-          : template?.name;
-        return {
-          type: 'item',
-          mode: 'reference',
-          name: collection.name,
-          template,
-          item,
-          title: templateName || t('Untitled'),
-        };
-      }),
-    },
+    ...allTemplatesMenuItems,
   ];
 };
 
@@ -926,6 +957,7 @@ export const useCollectionDataSourceItems = ({
     filterCollections: filter,
     showAssociationFields,
     componentNamePrefix,
+    name,
   });
   const association = useAssociationName();
 
@@ -1504,7 +1536,13 @@ const getChildren = ({
 
         return componentName && template.componentName === componentName;
       });
-      if (!templates.length) {
+      const inheritedTemplatesMenuItems = Array.from(initializerMenusGenerators.values())
+        .map((generator) => {
+          return generator({ item, index, componentName, association });
+        })
+        .filter(Boolean)
+        .flat();
+      if ((!templates.length && !inheritedTemplatesMenuItems.length) || isInTemplateSettingPage()) {
         return {
           type: 'item',
           name: item.name,
@@ -1512,22 +1550,14 @@ const getChildren = ({
           dataSource,
         };
       }
-      return {
-        key: `${componentName}_table_subMenu_${index}`,
-        type: 'subMenu',
-        name: `${item.name}_${index}`,
-        title,
-        dataSource,
-        children: [
-          {
-            type: 'item',
-            name: item.name,
-            dataSource,
-            title: t('Blank block'),
-          },
-          {
-            type: 'divider',
-          },
+      const allTemplatesMenuItems: SchemaInitializerItemType[] = [
+        {
+          type: 'divider',
+          name: 'divider',
+        },
+      ];
+      if (templates.length) {
+        allTemplatesMenuItems.push(
           {
             key: `${componentName}_table_subMenu_${index}_copy`,
             type: 'subMenu',
@@ -1574,6 +1604,32 @@ const getChildren = ({
               };
             }),
           },
+        );
+      }
+      if (inheritedTemplatesMenuItems.length) {
+        allTemplatesMenuItems.push({
+          type: 'subMenu',
+          name: 'inherited_templates',
+          key: `associationFiled_${componentName}_table_subMenu_${index}_inherited`,
+          dataSource,
+          title: t('Inherited template'),
+          children: inheritedTemplatesMenuItems,
+        });
+      }
+      return {
+        key: `${componentName}_table_subMenu_${index}`,
+        type: 'subMenu',
+        name: `${item.name}_${index}`,
+        title,
+        dataSource,
+        children: [
+          {
+            type: 'item',
+            name: item.name,
+            dataSource,
+            title: t('Blank block'),
+          },
+          ...allTemplatesMenuItems,
         ],
       };
     });
@@ -1701,11 +1757,13 @@ function useAssociationFields({
   filterCollections,
   showAssociationFields,
   componentNamePrefix,
+  name,
 }: {
   componentName: string;
   filterCollections: (options: { collection?: Collection; associationField?: CollectionFieldOptions }) => boolean;
   componentNamePrefix: string;
   showAssociationFields?: boolean;
+  name: string;
 }) {
   const fieldSchema = useFieldSchema();
   const { getCollectionFields } = useCollectionManager_deprecated();
@@ -1753,7 +1811,12 @@ function useAssociationFields({
 
           return template.componentName === componentName;
         });
-        if (!templates.length) {
+        const keyPrefix = `associationFiled_table_subMenu`;
+        const inheritedTemplatesMenuItems = Array.from(initializerMenusGenerators.values())
+          .map((generator) => generator({ collection, index, field, componentName, keyPrefix, name }))
+          .filter(Boolean)
+          .flat();
+        if ((!templates.length && !inheritedTemplatesMenuItems.length) || isInTemplateSettingPage()) {
           return {
             type: 'item',
             name: `${field.collectionName}.${field.name}`,
@@ -1763,24 +1826,14 @@ function useAssociationFields({
             associationField: field,
           };
         }
-        return {
-          key: `associationFiled_${componentName}_table_subMenu_${index}`,
-          type: 'subMenu',
-          name: `${field.target}_${index}`,
-          title,
-          dataSource,
-          children: [
-            {
-              type: 'item',
-              name: `${field.collectionName}.${field.name}`,
-              collectionName: field.target,
-              dataSource,
-              title: t('Blank block'),
-              associationField: field,
-            },
-            {
-              type: 'divider',
-            },
+        const allTemplatesMenuItems: SchemaInitializerItemType[] = [
+          {
+            type: 'divider',
+            name: 'divider',
+          },
+        ];
+        if (templates.length) {
+          allTemplatesMenuItems.push(
             {
               key: `associationFiled_${componentName}_table_subMenu_${index}_copy`,
               type: 'subMenu',
@@ -1831,6 +1884,35 @@ function useAssociationFields({
                 };
               }),
             },
+          );
+        }
+        if (inheritedTemplatesMenuItems.length) {
+          allTemplatesMenuItems.push({
+            type: 'subMenu',
+            name: 'inherited_templates',
+            key: `associationFiled_${componentName}_table_subMenu_${index}_inherited`,
+            dataSource,
+            title: t('Inherited template'),
+            children: inheritedTemplatesMenuItems,
+          });
+        }
+
+        return {
+          key: `associationFiled_${componentName}_table_subMenu_${index}`,
+          type: 'subMenu',
+          name: `${field.target}_${index}`,
+          title,
+          dataSource,
+          children: [
+            {
+              type: 'item',
+              name: `${field.collectionName}.${field.name}`,
+              collectionName: field.target,
+              dataSource,
+              title: t('Blank block'),
+              associationField: field,
+            },
+            ...allTemplatesMenuItems,
           ],
         };
       });
@@ -1847,4 +1929,18 @@ function useAssociationFields({
     t,
     componentNamePrefix,
   ]);
+}
+
+const isInTemplateSettingPage = () => window.location.pathname.includes('/block-templates/inherited');
+
+const initializerMenusGenerators = new Map<
+  string,
+  (options: any) => SchemaInitializerItemType | SchemaInitializerItemType[]
+>();
+
+export function registerInitializerMenusGenerator(
+  key: string,
+  generator: (options: any) => SchemaInitializerItemType | SchemaInitializerItemType[],
+) {
+  initializerMenusGenerators.set(key, generator);
 }

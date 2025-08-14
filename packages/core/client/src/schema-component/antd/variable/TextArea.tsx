@@ -9,11 +9,12 @@
 
 import { css, cx } from '@emotion/css';
 import { useForm } from '@formily/react';
-import { Space } from 'antd';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Input as AntInput, Space, theme } from 'antd';
+import type { CascaderProps, DefaultOptionType } from 'antd/lib/cascader';
+import useInputStyle from 'antd/es/input/style';
+import React, { useCallback, useEffect, useMemo, useRef, useState, isValidElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import sanitizeHTML from 'sanitize-html';
-import useInputStyle from 'antd/es/input/style';
 
 import { error } from '@nocobase/utils/client';
 
@@ -23,8 +24,6 @@ import { VariableSelect } from './VariableSelect';
 import { useStyles } from './style';
 
 type RangeIndexes = [number, number, number, number];
-
-const VARIABLE_RE = /{{\s*([^{}]+)\s*}}/g;
 
 function pasteHTML(
   container: HTMLElement,
@@ -41,7 +40,7 @@ function pasteHTML(
   if (indexes) {
     const children = Array.from(container.childNodes);
     if (indexes[0] === -1) {
-      if (indexes[1]) {
+      if (indexes[1] && children[indexes[1] - 1]) {
         range.setStartAfter(children[indexes[1] - 1]);
       } else {
         range.setStart(container, 0);
@@ -51,7 +50,7 @@ function pasteHTML(
     }
 
     if (indexes[2] === -1) {
-      if (indexes[3]) {
+      if (indexes[3] && children[indexes[3] - 1]) {
         range.setEndAfter(children[indexes[3] - 1]);
       } else {
         range.setEnd(container, 0);
@@ -92,11 +91,11 @@ function pasteHTML(
   }
 }
 
-function getValue(el) {
+function getValue(el, delimiters = ['{{', '}}']) {
   const values: any[] = [];
   for (const node of el.childNodes) {
     if (node.nodeName === 'SPAN' && node['dataset']['variable']) {
-      values.push(`{{${node['dataset']['variable']}}}`);
+      values.push(`${delimiters[0]}${node['dataset']['variable']}${delimiters[1]}`);
     } else {
       values.push(node.textContent);
     }
@@ -104,20 +103,21 @@ function getValue(el) {
   return values.join('');
 }
 
-function renderHTML(exp: string, keyLabelMap) {
-  return exp.replace(VARIABLE_RE, (_, i) => {
+function renderHTML(exp: string, keyLabelMap, delimiters: [string, string] = ['{{', '}}']) {
+  const variableRegExp = new RegExp(`${delimiters[0]}\\s*([^{}]+)\\s*${delimiters[1]}`, 'g');
+  return exp.replace(variableRegExp, (_, i) => {
     const key = i.trim();
     return createVariableTagHTML(key, keyLabelMap) ?? '';
   });
 }
 
-function createOptionsValueLabelMap(options: any[]) {
+function createOptionsValueLabelMap(options: any[], fieldNames: CascaderProps['fieldNames'] = defaultFieldNames) {
   const map = new Map<string, string[]>();
   for (const option of options) {
-    map.set(option.value, [option.label]);
+    map.set(option[fieldNames.value], [option[fieldNames.label]]);
     if (option.children) {
-      for (const [value, labels] of createOptionsValueLabelMap(option.children)) {
-        map.set(`${option.value}.${value}`, [option.label, ...labels]);
+      for (const [value, labels] of createOptionsValueLabelMap(option.children, fieldNames)) {
+        map.set(`${option[fieldNames.value]}.${value}`, [option[fieldNames.label], ...labels]);
       }
     }
   }
@@ -129,7 +129,7 @@ function createVariableTagHTML(variable, keyLabelMap) {
 
   if (labels) {
     labels = labels.map((label) => {
-      if (isReactElement(label)) {
+      if (isReactElement(label) || isValidElement(label)) {
         return renderToString(label);
       }
       return label;
@@ -149,20 +149,20 @@ function getSingleEndRange(nodes: ChildNode[], index: number, offset: number): [
   if (index === -1) {
     let realIndex = offset;
     let collapseFlag = false;
-    if (realIndex && nodes[realIndex - 1].nodeName === '#text' && nodes[realIndex]?.nodeName === '#text') {
+    if (realIndex && nodes[realIndex - 1]?.nodeName === '#text' && nodes[realIndex]?.nodeName === '#text') {
       // set a flag for collapse
       collapseFlag = true;
     }
     let textOffset = 0;
     for (let i = offset - 1; i >= 0; i--) {
       if (collapseFlag) {
-        if (nodes[i].nodeName === '#text') {
+        if (nodes[i]?.nodeName === '#text') {
           textOffset += nodes[i].textContent!.length;
         } else {
           collapseFlag = false;
         }
       }
-      if (nodes[i].nodeName === '#text' && nodes[i + 1]?.nodeName === '#text') {
+      if (nodes[i]?.nodeName === '#text' && nodes[i + 1]?.nodeName === '#text') {
         realIndex -= 1;
       }
     }
@@ -172,9 +172,8 @@ function getSingleEndRange(nodes: ChildNode[], index: number, offset: number): [
     let realIndex = 0;
     let textOffset = 0;
     for (let i = 0; i < index + 1; i++) {
-      // console.log(i, realIndex, textOffset);
-      if (nodes[i].nodeName === '#text') {
-        if (i !== index && nodes[i + 1] && nodes[i + 1].nodeName !== '#text') {
+      if (nodes[i]?.nodeName === '#text') {
+        if (i !== index && nodes[i + 1] && nodes[i + 1]?.nodeName !== '#text') {
           realIndex += 1;
         }
         textOffset += i === index ? offset : nodes[i].textContent!.length;
@@ -208,34 +207,77 @@ function getCurrentRange(element: HTMLElement): RangeIndexes {
   return result;
 }
 
-export function TextArea(props) {
+const defaultFieldNames = { value: 'value', label: 'label' };
+
+function useVariablesFromValue(value: string, delimiters: [string, string] = ['{{', '}}']) {
+  const delimitersString = delimiters.join(' ');
+  return useMemo(() => {
+    if (!value?.trim()) {
+      return [];
+    }
+    const variableRegExp = new RegExp(`${delimiters[0]}\\s*([^{}]+)\\s*${delimiters[1]}`, 'g');
+    const matches = value.match(variableRegExp);
+    return matches?.map((m) => m.replace(variableRegExp, '$1')) ?? [];
+  }, [value, delimitersString]);
+}
+
+export type TextAreaProps = {
+  value?: string;
+  scope?: Partial<DefaultOptionType>[] | (() => Partial<DefaultOptionType>[]);
+  onChange?(value: string): void;
+  disabled?: boolean;
+  changeOnSelect?: CascaderProps['changeOnSelect'];
+  style?: React.CSSProperties;
+  fieldNames?: CascaderProps['fieldNames'];
+  trim?: boolean;
+  delimiters?: [string, string];
+  addonBefore?: React.ReactNode;
+};
+
+export function TextArea(props: TextAreaProps) {
   const { wrapSSR, hashId, componentCls } = useStyles();
-  const { value = '', scope, onChange, changeOnSelect, style } = props;
+  const { scope, changeOnSelect, style, fieldNames, delimiters = ['{{', '}}'], addonBefore, trim = true } = props;
+  const value =
+    typeof props.value === 'string' ? props.value : props.value == null ? '' : (props.value as any).toString();
+  const variables = useVariablesFromValue(value, delimiters);
   const inputRef = useRef<HTMLDivElement>(null);
   const [options, setOptions] = useState([]);
   const form = useForm();
-  const keyLabelMap = useMemo(() => createOptionsValueLabelMap(options), [options]);
+  const keyLabelMap = useMemo(
+    () => createOptionsValueLabelMap(options, fieldNames || defaultFieldNames),
+    [fieldNames, options],
+  );
   const [ime, setIME] = useState<boolean>(false);
   const [changed, setChanged] = useState(false);
-  const [html, setHtml] = useState(() => renderHTML(value ?? '', keyLabelMap));
+  const [html, setHtml] = useState(() => renderHTML(value ?? '', keyLabelMap, delimiters));
   // NOTE: e.g. [startElementIndex, startOffset, endElementIndex, endOffset]
   const [range, setRange] = useState<[number, number, number, number]>([-1, 0, -1, 0]);
   useInputStyle('ant-input');
+  const { token } = theme.useToken();
+  const delimitersString = delimiters.join(' ');
+
+  const onChange = useCallback(
+    (target: HTMLDivElement) => {
+      const v = getValue(target, delimiters);
+      props.onChange?.(trim ? v.trim() : v);
+    },
+    [delimitersString, props.onChange, trim],
+  );
 
   useEffect(() => {
-    preloadOptions(scope, value)
+    preloadOptions(scope, variables)
       .then((preloaded) => {
         setOptions(preloaded);
       })
       .catch(console.error);
-  }, [scope, value]);
+  }, [scope, JSON.stringify(variables)]);
 
   useEffect(() => {
-    setHtml(renderHTML(value ?? '', keyLabelMap));
+    setHtml(renderHTML(value ?? '', keyLabelMap, delimiters));
     if (!changed) {
       setRange([-1, 0, -1, 0]);
     }
-  }, [value, keyLabelMap]);
+  }, [value, keyLabelMap, delimitersString]);
 
   useEffect(() => {
     const { current } = inputRef;
@@ -305,7 +347,7 @@ export function TextArea(props) {
 
       setChanged(true);
       setRange(getCurrentRange(current));
-      onChange(getValue(current));
+      onChange(current);
     },
     [keyLabelMap, onChange, range],
   );
@@ -317,7 +359,7 @@ export function TextArea(props) {
       }
       setChanged(true);
       setRange(getCurrentRange(currentTarget));
-      onChange(getValue(currentTarget));
+      onChange(currentTarget);
     },
     [ime, onChange],
   );
@@ -341,7 +383,7 @@ export function TextArea(props) {
       setIME(false);
       setChanged(true);
       setRange(getCurrentRange(currentTarget));
-      onChange(getValue(currentTarget));
+      onChange(currentTarget);
     },
     [onChange],
   );
@@ -374,95 +416,116 @@ export function TextArea(props) {
       setChanged(true);
       pasteHTML(ev.currentTarget, sanitizedHTML);
       setRange(getCurrentRange(ev.currentTarget));
-      onChange(getValue(ev.currentTarget));
+      onChange(ev.currentTarget);
     },
     [onChange],
   );
-
   const disabled = props.disabled || form.disabled;
   return wrapSSR(
-    <Space.Compact
-      className={cx(
-        componentCls,
-        hashId,
-        css`
-          display: flex;
-          .ant-input {
-            flex-grow: 1;
-            min-width: 200px;
-            word-break: break-all;
-          }
-          .ant-input-disabled {
-            .ant-tag {
-              color: #bfbfbf;
-              border-color: #d9d9d9;
-            }
-          }
-
-          > .x-button {
-            height: min-content;
-          }
-        `,
-      )}
-    >
-      <div
-        role="button"
-        aria-label="textbox"
-        onInput={onInput}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        onPaste={onPaste}
-        onCompositionStart={onCompositionStart}
-        onCompositionEnd={onCompositionEnd}
-        placeholder={props.placeholder}
-        style={style}
+    <>
+      <Space.Compact
         className={cx(
+          componentCls,
           hashId,
-          'ant-input',
-          { 'ant-input-disabled': disabled },
-          // NOTE: `pre-wrap` here for avoid the `&nbsp;` (\x160) issue when paste content, we need normal space (\x32).
           css`
-            overflow: auto;
-            white-space: pre-wrap;
-
-            &[placeholder]:empty::before {
-              content: attr(placeholder);
-              color: #ccc;
+            display: flex;
+            .ant-input {
+              flex-grow: 1;
+              min-width: 200px;
+              word-break: break-all;
+              border-top-left-radius: ${addonBefore ? '0px' : '6px'};
+              border-bottom-left-radius: ${addonBefore ? '0px' : '6px'};
+            }
+            .ant-input-disabled {
+              .ant-tag {
+                color: #bfbfbf;
+                border-color: #d9d9d9;
+              }
             }
 
-            .ant-tag {
-              display: inline;
-              line-height: 19px;
-              margin: 0 0.5em;
-              padding: 2px 7px;
-              border-radius: 10px;
+            > .x-button {
+              height: min-content;
             }
           `,
         )}
-        ref={inputRef}
-        contentEditable={!disabled}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-      {!disabled ? (
-        <VariableSelect options={options} setOptions={setOptions} onInsert={onInsert} changeOnSelect={changeOnSelect} />
-      ) : null}
-    </Space.Compact>,
+      >
+        {addonBefore && (
+          <div
+            className={css`
+              background: rgba(0, 0, 0, 0.02);
+              border: 1px solid rgb(217, 217, 217);
+              padding: 0px 11px;
+              border-radius: 6px 0px 0px 6px;
+              border-right: 0px;
+            `}
+          >
+            {addonBefore}
+          </div>
+        )}
+        <div
+          role="button"
+          aria-label="textbox"
+          onInput={onInput}
+          onBlur={onBlur}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
+          // should use data-placeholder here, but not sure if it is safe to make the change, so add ignore here
+          // @ts-ignore
+          placeholder={props.placeholder}
+          style={style}
+          className={cx(
+            hashId,
+            'ant-input ant-input-outlined',
+            { 'ant-input-disabled': disabled },
+            // NOTE: `pre-wrap` here for avoid the `&nbsp;` (\x160) issue when paste content, we need normal space (\x32).
+            css`
+              min-height: ${token.controlHeight}px;
+              overflow: auto;
+              white-space: pre-wrap;
+
+              &[placeholder]:empty::before {
+                content: attr(placeholder);
+                color: #ccc;
+              }
+
+              .ant-tag {
+                display: inline;
+                line-height: 19px;
+                margin: 0 0.5em;
+                padding: 2px 7px;
+                border-radius: 10px;
+              }
+            `,
+          )}
+          ref={inputRef}
+          contentEditable={!disabled}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+        <VariableSelect
+          options={options}
+          setOptions={setOptions}
+          onInsert={onInsert}
+          changeOnSelect={changeOnSelect}
+          fieldNames={fieldNames || defaultFieldNames}
+          disabled={disabled}
+        />
+      </Space.Compact>
+      {/* 确保所有ant input样式都已加载, 放到Compact中会导致Compact中的Input样式不对 */}
+      <AntInput style={{ display: 'none' }} />
+    </>,
   );
 }
 
-async function preloadOptions(scope, value: string) {
+async function preloadOptions(scope, variables: string[]) {
   let options = [...(scope ?? [])];
-
+  const paths = variables.map((variable) => variable.split('.'));
   options = options.filter((item) => {
-    return !item.deprecated || value?.includes(item.value);
+    return !item.deprecated || paths.find((p) => p[0] === item.value);
   });
 
-  // 重置正则的匹配位置
-  VARIABLE_RE.lastIndex = 0;
-
-  for (let matcher; (matcher = VARIABLE_RE.exec(value ?? '')); ) {
-    const keys = matcher[1].split('.');
-
+  for (const keys of paths) {
     let prevOption = null;
 
     for (let i = 0; i < keys.length; i++) {
@@ -484,41 +547,38 @@ async function preloadOptions(scope, value: string) {
   return options;
 }
 
+const textAreaReadPrettyClassName = css`
+  overflow: auto;
+
+  .ant-tag {
+    display: inline;
+    line-height: 19px;
+    margin: 0 0.25em;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+`;
+
 TextArea.ReadPretty = function ReadPretty(props): JSX.Element {
-  const { value } = props;
+  const { value, delimiters = ['{{', '}}'] } = props;
   const scope = typeof props.scope === 'function' ? props.scope() : props.scope;
   const { wrapSSR, hashId, componentCls } = useStyles();
-
   const [options, setOptions] = useState([]);
   const keyLabelMap = useMemo(() => createOptionsValueLabelMap(options), [options]);
-
+  const html = useMemo(() => renderHTML(value ?? '', keyLabelMap, delimiters), [delimiters, keyLabelMap, value]);
+  const variables = useVariablesFromValue(value, delimiters);
   useEffect(() => {
-    preloadOptions(scope, value)
+    preloadOptions(scope, variables)
       .then((preloaded) => {
         setOptions(preloaded);
       })
       .catch(error);
-  }, [scope, value]);
-  const html = renderHTML(value ?? '', keyLabelMap);
+  }, [scope, variables]);
 
   const content = wrapSSR(
     <span
       dangerouslySetInnerHTML={{ __html: html }}
-      className={cx(
-        componentCls,
-        hashId,
-        css`
-          overflow: auto;
-
-          .ant-tag {
-            display: inline;
-            line-height: 19px;
-            margin: 0 0.25em;
-            padding: 2px 7px;
-            border-radius: 10px;
-          }
-        `,
-      )}
+      className={cx(componentCls, hashId, textAreaReadPrettyClassName)}
     />,
   );
 

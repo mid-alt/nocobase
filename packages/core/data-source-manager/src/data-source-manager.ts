@@ -7,10 +7,10 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { createConsoleLogger, createLogger, Logger, LoggerOptions } from '@nocobase/logger';
 import { ToposortOptions } from '@nocobase/utils';
 import { DataSource } from './data-source';
 import { DataSourceFactory } from './data-source-factory';
-import { createConsoleLogger, createLogger, Logger, LoggerOptions } from '@nocobase/logger';
 
 type DataSourceHook = (dataSource: DataSource) => void;
 
@@ -24,13 +24,14 @@ export class DataSourceManager {
   /**
    * @internal
    */
-  factory: DataSourceFactory = new DataSourceFactory();
+  factory: DataSourceFactory;
   protected middlewares = [];
   private onceHooks: Array<DataSourceHook> = [];
   private beforeAddHooks: Array<DataSourceHook> = [];
 
   constructor(public options: DataSourceManagerOptions = {}) {
     this.dataSources = new Map();
+    this.factory = new DataSourceFactory(this);
     this.middlewares = [];
 
     if (options.app) {
@@ -65,13 +66,12 @@ export class DataSourceManager {
       hook(dataSource);
     }
 
+    await dataSource.load(options);
     const oldDataSource = this.dataSources.get(dataSource.name);
 
     if (oldDataSource) {
       await oldDataSource.close();
     }
-
-    await dataSource.load(options);
     this.dataSources.set(dataSource.name, dataSource);
 
     for (const hook of this.onceHooks) {
@@ -84,17 +84,20 @@ export class DataSourceManager {
   }
 
   middleware() {
-    return async (ctx, next) => {
+    const self = this;
+
+    return async function dataSourceManager(ctx, next) {
       const name = ctx.get('x-data-source') || 'main';
 
-      if (!this.dataSources.has(name)) {
+      if (!self.dataSources.has(name)) {
         ctx.throw(`data source ${name} does not exist`);
       }
 
-      const ds = this.dataSources.get(name);
+      const ds = self.dataSources.get(name);
       ctx.dataSource = ds;
 
-      return ds.middleware(this.middlewares)(ctx, next);
+      const composedFn = ds.middleware(self.middlewares);
+      return composedFn(ctx, next);
     };
   }
 

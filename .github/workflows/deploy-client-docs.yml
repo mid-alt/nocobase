@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'yarn'
       - run: yarn install
       - name: Build zh-CN
@@ -44,7 +44,7 @@ jobs:
             echo "::set-output name=tags::pr-${{ github.event.pull_request.number }}"
           fi
       - name: copy files via ssh - ${{ steps.set-tags.outputs.tags }}
-        uses: appleboy/scp-action@v0.1.4
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.CN_CLIENT_HOST }}
           username: ${{ secrets.CN_CLIENT_USERNAME }}

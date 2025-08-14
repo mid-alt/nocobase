@@ -12,12 +12,24 @@ import { css } from '@emotion/css';
 import { useField, useFieldSchema } from '@formily/react';
 import { Space } from 'antd';
 import classNames from 'classnames';
-import React, { FC, useEffect, useMemo, useRef } from 'react';
+import React, {
+  createContext,
+  FC,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
+import { SchemaComponentContext } from '../';
 import { SchemaInitializer, SchemaSettings, SchemaToolbarProvider, useSchemaInitializerRender } from '../application';
 import { useSchemaSettingsRender } from '../application/schema-settings/hooks/useSchemaSettingsRender';
 import { useDataSourceManager } from '../data-source/data-source/DataSourceManagerProvider';
 import { useDataSource } from '../data-source/data-source/DataSourceProvider';
+import { RefreshComponentProvider, useRefreshFieldSchema } from '../formily/NocoBaseRecursionField';
 import { DragHandler, useCompile, useDesignable, useGridContext, useGridRowContext } from '../schema-component';
 import { gridRowColWrap } from '../schema-initializer/utils';
 import { SchemaSettingsDropdown } from './SchemaSettings';
@@ -124,9 +136,16 @@ export const GeneralSchemaDesigner: FC<GeneralSchemaDesignerProps> = (props: any
   if (!designable) {
     return null;
   }
+
   return (
     <SchemaToolbarProvider {...contextValue}>
-      <div className={classNames('general-schema-designer', overrideAntdCSS)}>
+      <div
+        className={classNames(
+          'general-schema-designer',
+          overrideAntdCSS,
+          fieldSchema['x-template-uid'] ? 'nb-in-template' : '',
+        )}
+      >
         {title && (
           <div className={classNames('general-schema-designer-title', titleCss)}>
             <Space size={2}>
@@ -195,9 +214,15 @@ export interface SchemaToolbarProps {
   spaceWrapperStyle?: React.CSSProperties;
   spaceClassName?: string;
   spaceStyle?: React.CSSProperties;
+  /**
+   * The HTML element that listens for mouse enter/leave events.
+   * Parent element is used by default.
+   */
+  container?: HTMLElement;
+  onVisibleChange?: (nextVisible: boolean) => void;
 }
 
-const InternalSchemaToolbar: FC<SchemaToolbarProps> = (props) => {
+const InternalSchemaToolbar: FC<SchemaToolbarProps> = React.memo((props) => {
   const fieldSchema = useFieldSchema();
   const {
     title,
@@ -212,25 +237,39 @@ const InternalSchemaToolbar: FC<SchemaToolbarProps> = (props) => {
     spaceStyle,
     toolbarClassName,
     toolbarStyle = {},
+    container,
   } = {
     ...props,
     ...(fieldSchema?.['x-toolbar-props'] || {}),
   } as SchemaToolbarProps;
-  const { designable } = useDesignable();
   const compile = useCompile();
-  const { styles } = useStyles();
+  const { draggable: draggableCtx } = useContext(SchemaComponentContext);
+  const { componentCls, hashId } = useStyles();
   const { t } = useTranslation();
   const { getAriaLabel } = useGetAriaLabelOfDesigner();
   const dm = useDataSourceManager();
   const dataSources = dm?.getDataSources();
   const dataSourceContext = useDataSource();
   const dataSource = dataSources?.length > 1 && dataSourceContext;
+  const refreshFieldSchema = useRefreshFieldSchema();
+  const templateTitleLabel = useRef(t('Reference template'));
+
+  const refresh = useCallback(() => {
+    refreshFieldSchema({ refreshParentSchema: true });
+  }, [refreshFieldSchema]);
 
   const titleArr = useMemo(() => {
     if (!title) return undefined;
     if (typeof title === 'string') return [compile(title)];
-    if (Array.isArray(title)) return title.map((item) => compile(item));
-  }, [compile, title]);
+    if (Array.isArray(title)) {
+      if (title.length === 1 && fieldSchema['x-template-title']) {
+        templateTitleLabel.current = t('Inherited template');
+        return compile([title[0], fieldSchema['x-template-title']]);
+      }
+      return compile(title);
+    }
+  }, [title, fieldSchema]);
+
   const { render: schemaSettingsRender, exists: schemaSettingsExists } = useSchemaSettingsRender(
     settings || fieldSchema?.['x-settings'],
     fieldSchema?.['x-settings-props'],
@@ -257,13 +296,13 @@ const InternalSchemaToolbar: FC<SchemaToolbarProps> = (props) => {
   }, [getAriaLabel, rowCtx?.cols?.length]);
 
   const dragElement = useMemo(() => {
-    if (draggable === false) return null;
+    if (draggable === false || draggableCtx === false) return null;
     return (
       <DragHandler>
         <DragOutlined role="button" aria-label={getAriaLabel('drag-handler')} />
       </DragHandler>
     );
-  }, [draggable, getAriaLabel]);
+  }, [draggable, getAriaLabel, draggableCtx]);
 
   const initializerElement = useMemo(() => {
     if (initializer === false) return null;
@@ -282,43 +321,108 @@ const InternalSchemaToolbar: FC<SchemaToolbarProps> = (props) => {
   const settingsElement = useMemo(() => {
     return settings !== false && schemaSettingsExists ? schemaSettingsRender() : null;
   }, [schemaSettingsExists, schemaSettingsRender, settings]);
-
   const toolbarRef = useRef<HTMLDivElement>(null);
+
+  const hiddenClassName = process.env.__E2E__ ? 'hidden-e2e' : 'hidden';
 
   useEffect(() => {
     const toolbarElement = toolbarRef.current;
     let parentElement = toolbarElement?.parentElement;
-    while (parentElement && window.getComputedStyle(parentElement).height === '0px') {
+    while (parentElement && parentElement.clientHeight === 0) {
       parentElement = parentElement.parentElement;
     }
-    if (!parentElement) {
+
+    const el = container || parentElement;
+
+    if (!el) {
       return;
     }
 
     function show() {
       if (toolbarElement) {
-        toolbarElement.style.display = 'block';
+        if (process.env.__E2E__) {
+          toolbarElement.style.display = 'block';
+        } else {
+          toolbarElement.classList.remove(hiddenClassName);
+        }
+        props.onVisibleChange?.(true);
       }
     }
 
     function hide() {
       if (toolbarElement) {
-        toolbarElement.style.display = 'none';
+        if (process.env.__E2E__) {
+          toolbarElement.style.display = 'none';
+        } else {
+          toolbarElement.classList.add(hiddenClassName);
+        }
+        props.onVisibleChange?.(false);
       }
     }
 
-    const style = window.getComputedStyle(parentElement);
-    if (style.position === 'static') {
-      parentElement.style.position = 'relative';
-    }
-
-    parentElement.addEventListener('mouseenter', show);
-    parentElement.addEventListener('mouseleave', hide);
-
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('mouseleave', hide);
     return () => {
-      parentElement.removeEventListener('mouseenter', show);
-      parentElement.removeEventListener('mouseleave', hide);
+      el.removeEventListener('mouseenter', show);
+      el.removeEventListener('mouseleave', hide);
     };
+  }, [props.onVisibleChange, container]);
+
+  const containerStyle = useMemo(
+    () => ({
+      border: showBorder ? 'auto' : 0,
+      background: showBackground ? 'auto' : 0,
+      ...toolbarStyle,
+    }),
+    [showBackground, showBorder, toolbarStyle],
+  );
+
+  return (
+    <div
+      ref={toolbarRef}
+      className={classNames(componentCls, hashId, toolbarClassName, 'schema-toolbar', hiddenClassName)}
+      style={containerStyle}
+    >
+      {titleArr && (
+        <div className={'toolbar-title'}>
+          <Space size={2}>
+            <span key={titleArr[0]} className={'toolbar-title-tag'}>
+              {dataSource ? `${compile(dataSource?.displayName)} > ${titleArr[0]}` : titleArr[0]}
+            </span>
+            {titleArr[1] && (
+              <span className={'toolbar-title-tag'}>
+                {`${templateTitleLabel.current}: ${`${titleArr[1]}` || t('Untitled')}`}
+              </span>
+            )}
+          </Space>
+        </div>
+      )}
+      <div className={classNames('toolbar-icons', spaceWrapperClassName)} style={spaceWrapperStyle}>
+        <Space size={3} align={'center'} className={spaceClassName} style={spaceStyle}>
+          {dragElement}
+          <RefreshComponentProvider refresh={refresh}>{initializerElement}</RefreshComponentProvider>
+          {settingsElement}
+        </Space>
+      </div>
+    </div>
+  );
+});
+
+InternalSchemaToolbar.displayName = 'InternalSchemaToolbar';
+
+/**
+ * @internal
+ */
+export const SchemaToolbarVisibleContext = createContext(false);
+
+export const SchemaToolbar: FC<SchemaToolbarProps> = React.memo((props) => {
+  const { designable } = useDesignable();
+  const [visible, setVisible] = useState(false);
+
+  const onVisibleChange = useCallback((nextVisible: boolean) => {
+    startTransition(() => {
+      setVisible(nextVisible);
+    });
   }, []);
 
   if (!designable) {
@@ -326,42 +430,10 @@ const InternalSchemaToolbar: FC<SchemaToolbarProps> = (props) => {
   }
 
   return (
-    <div
-      ref={toolbarRef}
-      className={classNames(styles.toolbar, toolbarClassName, 'schema-toolbar')}
-      style={{ border: showBorder ? 'auto' : 0, background: showBackground ? 'auto' : 0, ...toolbarStyle }}
-    >
-      {titleArr && (
-        <div className={styles.toolbarTitle}>
-          <Space size={2}>
-            <span key={titleArr[0]} className={styles.toolbarTitleTag}>
-              {dataSource ? `${compile(dataSource?.displayName)} > ${titleArr[0]}` : titleArr[0]}
-            </span>
-            {titleArr[1] && (
-              <span className={styles.toolbarTitleTag}>
-                {`${t('Reference template')}: ${`${titleArr[1]}` || t('Untitled')}`}
-              </span>
-            )}
-          </Space>
-        </div>
-      )}
-      <div className={classNames(styles.toolbarIcons, spaceWrapperClassName)} style={spaceWrapperStyle}>
-        <Space size={3} align={'center'} className={spaceClassName} style={spaceStyle}>
-          {dragElement}
-          {initializerElement}
-          {settingsElement}
-        </Space>
-      </div>
-    </div>
+    <SchemaToolbarVisibleContext.Provider value={visible}>
+      <InternalSchemaToolbar {...props} onVisibleChange={onVisibleChange} />
+    </SchemaToolbarVisibleContext.Provider>
   );
-};
+});
 
-export const SchemaToolbar: FC<SchemaToolbarProps> = (props) => {
-  const { designable } = useDesignable();
-
-  if (!designable) {
-    return null;
-  }
-
-  return <InternalSchemaToolbar {...props} />;
-};
+SchemaToolbar.displayName = 'SchemaToolbar';

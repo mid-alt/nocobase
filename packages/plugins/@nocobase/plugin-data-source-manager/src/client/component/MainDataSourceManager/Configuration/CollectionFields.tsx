@@ -81,13 +81,13 @@ const tableContainer = css`
   }
   td,
   th {
-    flex: 2;
+    flex: 2.3;
     width: 0;
     &:nth-child(5) {
       flex: 1.2;
     }
     &:last-child {
-      flex: 1.8;
+      flex: 1.5;
     }
   }
   .ant-table-selection-column,
@@ -207,7 +207,7 @@ const CurrentFields = (props) => {
           setState((state) => {
             return {
               ...state,
-              selectedRowKeys,
+              [props.type]: selectedRowKeys,
             };
           });
         },
@@ -315,7 +315,9 @@ const CollectionFieldsInternal = () => {
   const { name, template } = useRecord();
   const {
     data: { database },
-  } = useCurrentAppInfo();
+  } = useCurrentAppInfo() || {
+    data: { database: {} as any },
+  };
   const { getInterface, getInheritCollections, getCollection, getTemplate } = useCollectionManager_deprecated();
   const form = useMemo(() => createForm(), []);
   const f = useAttach(form.createArrayField({ ...field.props, basePath: '' }));
@@ -456,7 +458,7 @@ const CollectionFieldsInternal = () => {
             schema={{
               type: 'object',
               properties: {
-                ...targetTemplate.configureActions,
+                ...targetTemplate?.configureActions,
               },
             }}
           />
@@ -483,6 +485,7 @@ const CollectionFieldsInternal = () => {
                   fields={record.fields}
                   collectionResource={collectionResource}
                   refreshAsync={refreshAsync}
+                  type={record.key}
                 />
               ),
           }}

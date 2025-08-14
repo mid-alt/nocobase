@@ -13,10 +13,13 @@ import {
   SchemaSettings,
   useSchemaInitializer,
   useSchemaInitializerItem,
+  ModalActionSchemaInitializerItem,
+  SchemaSettingAccessControl,
+  SchemaSettingsLinkageRules,
+  useSchemaToolbar,
 } from '@nocobase/client';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ModalActionSchemaInitializerItem } from './ModalActionSchemaInitializerItem';
 
 export const workbenchActionSettingsScanQrCode = new SchemaSettings({
   name: 'workbench:actionSettings:scanQrCode',
@@ -26,6 +29,22 @@ export const workbenchActionSettingsScanQrCode = new SchemaSettings({
       Component: ButtonEditor,
       useComponentProps() {
         return { hasIconColor: true };
+      },
+    },
+    {
+      name: 'linkageRules',
+      Component: SchemaSettingsLinkageRules,
+      useComponentProps() {
+        const { linkageRulesProps } = useSchemaToolbar();
+        return {
+          ...linkageRulesProps,
+        };
+      },
+    },
+    {
+      ...SchemaSettingAccessControl,
+      useVisible() {
+        return true;
       },
     },
     {

@@ -10,15 +10,25 @@
 const chalk = require('chalk');
 const { Command } = require('commander');
 const { resolve } = require('path');
-const { run, promptForTs, runAppCommand, hasCorePackages, updateJsonFile, hasTsNode } = require('../util');
+const { run, promptForTs, runAppCommand, hasCorePackages, downloadPro, hasTsNode, checkDBDialect } = require('../util');
 const { existsSync, rmSync } = require('fs');
+const { readJSON, writeJSON } = require('fs-extra');
+const deepmerge = require('deepmerge');
+
+async function updatePackage() {
+  const sourcePath = resolve(__dirname, '../../templates/create-app-package.json');
+  const descPath = resolve(process.cwd(), 'package.json');
+  const sourceJson = await readJSON(sourcePath, 'utf8');
+  const descJson = await readJSON(descPath, 'utf8');
+  const json = deepmerge(descJson, sourceJson);
+  await writeJSON(descPath, json, { spaces: 2, encoding: 'utf8' });
+}
 
 /**
  *
  * @param {Command} cli
  */
 module.exports = (cli) => {
-  const { APP_PACKAGE_ROOT } = process.env;
   cli
     .command('upgrade')
     .allowUnknownOption()
@@ -26,47 +36,12 @@ module.exports = (cli) => {
     .option('--next')
     .option('-S|--skip-code-update')
     .action(async (options) => {
-      if (hasTsNode()) promptForTs();
-      if (hasCorePackages()) {
-        // await run('yarn', ['install']);
-        await runAppCommand('upgrade');
-        return;
-      }
+      checkDBDialect();
       if (options.skipCodeUpdate) {
         await runAppCommand('upgrade');
-        return;
-      }
-      // await runAppCommand('upgrade');
-      if (!hasTsNode()) {
-        await runAppCommand('upgrade');
-        return;
-      }
-      const rmAppDir = () => {
-        // If ts-node is not installed, do not do the following
-        const appDevDir = resolve(process.cwd(), './storage/.app-dev');
-        if (existsSync(appDevDir)) {
-          rmSync(appDevDir, { recursive: true, force: true });
-        }
-      };
-      const pkg = require('../../package.json');
-      // get latest version
-      const { stdout } = await run('npm', ['info', options.next ? '@nocobase/cli@next' : '@nocobase/cli', 'version'], {
-        stdio: 'pipe',
-      });
-      if (pkg.version === stdout) {
-        await runAppCommand('upgrade');
-        rmAppDir();
-        return;
-      }
-      const currentY = 1 * pkg.version.split('.')[1];
-      const latestY = 1 * stdout.split('.')[1];
-      if (options.next || currentY > latestY) {
-        await run('yarn', ['add', '@nocobase/cli@next', '@nocobase/devtools@next', '-W']);
       } else {
-        await run('yarn', ['add', '@nocobase/cli', '@nocobase/devtools', '-W']);
+        await run('nocobase', ['update-deps']);
+        await run('nocobase', ['upgrade', '--skip-code-update']);
       }
-      await run('yarn', ['install']);
-      await runAppCommand('upgrade');
-      rmAppDir();
     });
 };

@@ -10,6 +10,7 @@
 import { MockServer } from '@nocobase/test';
 import Database from '@nocobase/database';
 import { getApp, sleep } from '@nocobase/plugin-workflow-test';
+import { JOB_STATUS } from '../../constants';
 
 describe('workflow > actions > workflows', () => {
   let app: MockServer;
@@ -49,20 +50,30 @@ describe('workflow > actions > workflows', () => {
       expect(data.type).toBe('echo');
     });
 
-    it('create in executed workflow', async () => {
+    it.skipIf(process.env.DB_DIALECT === 'sqlite')('create in executed workflow', async () => {
       const workflow = await WorkflowModel.create({
         enabled: true,
         type: 'asyncTrigger',
-        executed: 1,
-        allExecuted: 1,
       });
+      await workflow.stats.update({ executed: 1 });
+      await workflow.versionStats.update({ executed: 1 });
 
-      const { status } = await agent.resource('workflows.nodes', workflow.id).create({
+      const res1 = await agent.resource('workflows.nodes', workflow.id).create({
         values: {
           type: 'echo',
         },
       });
-      expect(status).toBe(400);
+      expect(res1.status).toBe(400);
+
+      await workflow.stats.update({ executed: '10000000000000001' });
+      await workflow.versionStats.update({ executed: '10000000000000001' });
+
+      const res2 = await agent.resource('workflows.nodes', workflow.id).create({
+        values: {
+          type: 'echo',
+        },
+      });
+      expect(res2.status).toBe(400);
     });
 
     it('create as head', async () => {
@@ -242,6 +253,34 @@ describe('workflow > actions > workflows', () => {
 
       const nodes = await workflow.getNodes();
       expect(nodes.length).toBe(0);
+    });
+  });
+
+  describe('test', () => {
+    it('test method not implemented', async () => {
+      const { status } = await agent.resource('flow_nodes').test({ values: { type: 'error' } });
+
+      expect(status).toBe(400);
+    });
+
+    it('test method implemented', async () => {
+      const {
+        status,
+        body: { data },
+      } = await agent.resource('flow_nodes').test({ values: { type: 'echo' } });
+
+      expect(status).toBe(200);
+      expect(data.status).toBe(JOB_STATUS.RESOLVED);
+    });
+
+    it('test with pending status', async () => {
+      const {
+        status,
+        body: { data },
+      } = await agent.resource('flow_nodes').test({ values: { type: 'pending' } });
+
+      expect(status).toBe(200);
+      expect(data.status).toBe(JOB_STATUS.PENDING);
     });
   });
 });

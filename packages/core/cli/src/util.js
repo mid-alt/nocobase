@@ -11,12 +11,15 @@ const net = require('net');
 const chalk = require('chalk');
 const execa = require('execa');
 const fg = require('fast-glob');
-const { dirname, join, resolve, sep } = require('path');
+const { dirname, join, resolve, sep, isAbsolute } = require('path');
 const { readFile, writeFile } = require('fs').promises;
 const { existsSync, mkdirSync, cpSync, writeFileSync } = require('fs');
 const dotenv = require('dotenv');
-const fs = require('fs');
+const fs = require('fs-extra');
+const os = require('os');
 const moment = require('moment-timezone');
+const { keyDecrypt, getEnvAsync } = require('@nocobase/license-kit');
+const omit = require('lodash/omit');
 
 exports.isPackageValid = (pkg) => {
   try {
@@ -113,7 +116,7 @@ exports.postCheck = async (opts) => {
   const port = opts.port || process.env.APP_PORT;
   const result = await exports.isPortReachable(port);
   if (result) {
-    console.error(chalk.red(`post already in use ${port}`));
+    console.error(chalk.red(`Port ${port} already in use`));
     process.exit(1);
   }
 };
@@ -161,6 +164,15 @@ exports.runAppCommand = async (command, args = []) => {
 
 exports.promptForTs = () => {
   console.log(chalk.green('WAIT: ') + 'TypeScript compiling...');
+};
+
+exports.downloadPro = async () => {
+  // 此处不再判定，由pkgg命令处理
+  // const { NOCOBASE_PKG_USERNAME, NOCOBASE_PKG_PASSWORD } = process.env;
+  // if (!(NOCOBASE_PKG_USERNAME && NOCOBASE_PKG_PASSWORD)) {
+  //   return;
+  // }
+  await exports.run('yarn', ['nocobase', 'pkg', 'download-pro']);
 };
 
 exports.updateJsonFile = async (target, fn) => {
@@ -287,6 +299,7 @@ function buildIndexHtml(force = false) {
   const data = fs.readFileSync(tpl, 'utf-8');
   const replacedData = data
     .replace(/\{\{env.APP_PUBLIC_PATH\}\}/g, process.env.APP_PUBLIC_PATH)
+    .replace(/\{\{env.API_CLIENT_STORAGE_TYPE\}\}/g, process.env.API_CLIENT_STORAGE_TYPE)
     .replace(/\{\{env.API_CLIENT_STORAGE_PREFIX\}\}/g, process.env.API_CLIENT_STORAGE_PREFIX)
     .replace(/\{\{env.API_BASE_URL\}\}/g, process.env.API_BASE_URL || process.env.API_BASE_PATH)
     .replace(/\{\{env.WS_URL\}\}/g, process.env.WEBSOCKET_URL || '')
@@ -316,6 +329,32 @@ function areTimeZonesEqual(timeZone1, timeZone2) {
   return moment.tz(timeZone1).format('Z') === moment.tz(timeZone2).format('Z');
 }
 
+function generateGatewayPath() {
+  if (process.env.SOCKET_PATH) {
+    if (isAbsolute(process.env.SOCKET_PATH)) {
+      return process.env.SOCKET_PATH;
+    }
+    return resolve(process.cwd(), process.env.SOCKET_PATH);
+  }
+  if (process.env.NOCOBASE_RUNNING_IN_DOCKER === 'true') {
+    return resolve(os.homedir(), '.nocobase', 'gateway.sock');
+  }
+  return resolve(process.cwd(), 'storage/gateway.sock');
+}
+
+function generatePm2Home() {
+  if (process.env.PM2_HOME) {
+    if (isAbsolute(process.env.PM2_HOME)) {
+      return process.env.PM2_HOME;
+    }
+    return resolve(process.cwd(), process.env.PM2_HOME);
+  }
+  if (process.env.NOCOBASE_RUNNING_IN_DOCKER === 'true') {
+    return resolve(os.homedir(), '.nocobase', 'pm2');
+  }
+  return resolve(process.cwd(), './storage/.pm2');
+}
+
 exports.initEnv = function initEnv() {
   const env = {
     APP_ENV: 'development',
@@ -323,7 +362,8 @@ exports.initEnv = function initEnv() {
     APP_PORT: 13000,
     API_BASE_PATH: '/api/',
     API_CLIENT_STORAGE_PREFIX: 'NOCOBASE_',
-    DB_DIALECT: 'sqlite',
+    API_CLIENT_STORAGE_TYPE: 'localStorage',
+    // DB_DIALECT: 'sqlite',
     DB_STORAGE: 'storage/db/nocobase.sqlite',
     // DB_TIMEZONE: '+00:00',
     DB_UNDERSCORED: parseEnv('DB_UNDERSCORED'),
@@ -331,25 +371,28 @@ exports.initEnv = function initEnv() {
     LOCAL_STORAGE_DEST: 'storage/uploads',
     PLUGIN_STORAGE_PATH: resolve(process.cwd(), 'storage/plugins'),
     MFSU_AD: 'none',
+    MAKO_AD: 'none',
     WS_PATH: '/ws',
-    SOCKET_PATH: 'storage/gateway.sock',
+    // PM2_HOME: generatePm2Home(),
+    // SOCKET_PATH: generateGatewayPath(),
     NODE_MODULES_PATH: resolve(process.cwd(), 'node_modules'),
-    PM2_HOME: resolve(process.cwd(), './storage/.pm2'),
     PLUGIN_PACKAGE_PREFIX: '@nocobase/plugin-,@nocobase/plugin-sample-,@nocobase/preset-',
     SERVER_TSCONFIG_PATH: './tsconfig.server.json',
     PLAYWRIGHT_AUTH_FILE: resolve(process.cwd(), 'storage/playwright/.auth/admin.json'),
     CACHE_DEFAULT_STORE: 'memory',
     CACHE_MEMORY_MAX: 2000,
+    BROWSERSLIST_IGNORE_OLD_DATA: true,
     PLUGIN_STATICS_PATH: '/static/plugins/',
     LOGGER_BASE_PATH: 'storage/logs',
     APP_SERVER_BASE_URL: '',
     APP_PUBLIC_PATH: '/',
+    WATCH_FILE: resolve(process.cwd(), 'storage/app.watch.ts'),
   };
 
   if (
     !process.env.APP_ENV_PATH &&
     process.argv[2] &&
-    ['test', 'test:client', 'test:server'].includes(process.argv[2])
+    ['test', 'test:client', 'test:server', 'benchmark'].includes(process.argv[2])
   ) {
     if (fs.existsSync(resolve(process.cwd(), '.env.test'))) {
       process.env.APP_ENV_PATH = '.env.test';
@@ -415,4 +458,121 @@ exports.initEnv = function initEnv() {
       `process.env.DB_TIMEZONE="${process.env.DB_TIMEZONE}" and process.env.TZ="${process.env.TZ}" are different`,
     );
   }
+
+  process.env.PM2_HOME = generatePm2Home();
+  process.env.SOCKET_PATH = generateGatewayPath();
+  fs.mkdirpSync(dirname(process.env.SOCKET_PATH), { force: true, recursive: true });
+  fs.mkdirpSync(process.env.PM2_HOME, { force: true, recursive: true });
+  const pkgs = [
+    '@nocobase/plugin-multi-app-manager',
+    '@nocobase/plugin-departments',
+    '@nocobase/plugin-field-attachment-url',
+    '@nocobase/plugin-workflow-response-message',
+  ];
+  for (const pkg of pkgs) {
+    const pkgDir = resolve(process.cwd(), 'storage/plugins', pkg);
+    fs.existsSync(pkgDir) && fs.rmdirSync(pkgDir, { recursive: true, force: true });
+  }
 };
+
+exports.checkDBDialect = function () {
+  if (!process.env.DB_DIALECT) {
+    throw new Error('DB_DIALECT is required.');
+  }
+};
+
+exports.generatePlugins = function () {
+  try {
+    require.resolve('@nocobase/devtools/umiConfig');
+    const { generatePlugins } = require('@nocobase/devtools/umiConfig');
+    generatePlugins();
+  } catch (error) {
+    return;
+  }
+};
+
+async function isEnvMatch(keyData) {
+  const env = await getEnvAsync();
+  if (env?.container?.id && keyData?.instanceData?.container?.id) {
+    return (
+      JSON.stringify(omit(env, ['timestamp', 'container', 'hostname', 'mac'])) ===
+      JSON.stringify(omit(keyData?.instanceData, ['timestamp', 'container', 'hostname', 'mac']))
+    );
+  }
+  return (
+    JSON.stringify(omit(env, ['timestamp', 'mac'])) ===
+    JSON.stringify(omit(keyData?.instanceData, ['timestamp', 'mac']))
+  );
+}
+
+exports.getAccessKeyPair = async function () {
+  const keyFile = resolve(process.cwd(), 'storage/.license/license-key');
+  if (!fs.existsSync(keyFile)) {
+    return {};
+  }
+
+  let keyData = {};
+  try {
+    const str = fs.readFileSync(keyFile, 'utf-8');
+    const keyDataStr = keyDecrypt(str);
+    keyData = JSON.parse(keyDataStr);
+  } catch (error) {
+    showLicenseInfo(LicenseKeyError.parseFailed);
+    throw new Error(LicenseKeyError.parseFailed.title);
+  }
+
+  const isEnvMatched = await isEnvMatch(keyData);
+  if (!isEnvMatched) {
+    showLicenseInfo(LicenseKeyError.notMatch);
+    throw new Error(LicenseKeyError.notMatch.title);
+  }
+
+  const { accessKeyId, accessKeySecret } = keyData;
+  return { accessKeyId, accessKeySecret };
+};
+
+const LicenseKeyError = {
+  notExist: {
+    title: 'License key not found',
+    content:
+      'Please go to the license settings page to obtain the Instance ID for the current environment, and then generate the license key on the service platform.',
+  },
+  parseFailed: {
+    title: 'Invalid license key format',
+    content: 'Please check your license key, or regenerate the license key on the service platform.',
+  },
+  notMatch: {
+    title: 'License key mismatch',
+    content:
+      'Please go to the license settings page to obtain the Instance ID for the current environment, and then regenerate the license key on the service platform.',
+  },
+  notValid: {
+    title: 'Invalid license key',
+    content:
+      'Please go to the license settings page to obtain the Instance ID for the current environment, and then regenerate the license key on the service platform.',
+  },
+};
+
+exports.LicenseKeyError = LicenseKeyError;
+
+function showLicenseInfo({ title, content }) {
+  const rows = [];
+  const length = 80;
+  let row = '';
+  content.split(' ').forEach((word) => {
+    if (row.length + word.length > length) {
+      rows.push(row);
+      row = '';
+    }
+    row += word + ' ';
+  });
+  if (row) {
+    rows.push(row);
+  }
+  console.log(Array(length).fill('-').join(''));
+  console.log(chalk.yellow(title));
+  console.log(chalk.yellow(rows.join('\n')));
+  console.log(Array(length).fill('-').join(''));
+}
+
+exports.showLicenseInfo = showLicenseInfo;

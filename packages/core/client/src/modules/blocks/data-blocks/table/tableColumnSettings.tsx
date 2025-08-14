@@ -7,23 +7,25 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import React from 'react';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { ISchema } from '@formily/json-schema';
-import { useField, useFieldSchema } from '@formily/react';
+import { useField, useFieldSchema, useForm } from '@formily/react';
+import { Tooltip } from 'antd';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp, useSchemaToolbar } from '../../../../application';
 import { SchemaSettings } from '../../../../application/schema-settings/SchemaSettings';
 import { useCollectionManager_deprecated } from '../../../../collection-manager';
 import { useFieldComponentName } from '../../../../common/useFieldComponentName';
 import { useCollection } from '../../../../data-source';
+import { fieldComponentSettingsItem } from '../../../../data-source/commonsSettingsItem';
+import { useFlag } from '../../../../flag-provider/hooks/useFlag';
 import { useDesignable } from '../../../../schema-component';
 import { useAssociationFieldContext } from '../../../../schema-component/antd/association-field/hooks';
 import { useColumnSchema } from '../../../../schema-component/antd/table-v2/Table.Column.Decorator';
+import { SchemaSettingsLinkageRules } from '../../../../schema-settings';
 import { SchemaSettingsDefaultValue } from '../../../../schema-settings/SchemaSettingsDefaultValue';
 import { isPatternDisabled } from '../../../../schema-settings/isPatternDisabled';
-import { fieldComponentSettingsItem } from '../../../../data-source/commonsSettingsItem';
-import { SchemaSettingsLinkageRules } from '../../../../schema-settings';
-
 export const tableColumnSettings = new SchemaSettings({
   name: 'fieldSettings:TableColumn',
   items: [
@@ -66,17 +68,53 @@ export const tableColumnSettings = new SchemaSettings({
                 },
               } as ISchema,
               onSubmit: ({ title }) => {
-                if (title) {
-                  field.title = title;
-                  columnSchema.title = title;
-                  dn.emit('patch', {
-                    schema: {
-                      'x-uid': columnSchema['x-uid'],
-                      title: columnSchema.title,
-                    },
-                  });
-                }
+                field.title = title;
+                columnSchema.title = title;
+                dn.emit('patch', {
+                  schema: {
+                    'x-uid': columnSchema['x-uid'],
+                    title: columnSchema.title,
+                  },
+                });
+
                 dn.refresh();
+              },
+            };
+          },
+        },
+        {
+          name: 'editTooltip',
+          type: 'modal',
+          useComponentProps() {
+            const { t } = useTranslation();
+            const { dn } = useDesignable();
+            const field = useField();
+            const columnSchema = useFieldSchema();
+
+            return {
+              title: t('Edit tooltip'),
+              schema: {
+                type: 'object',
+                title: t('Edit tooltip'),
+                properties: {
+                  tooltip: {
+                    default: columnSchema?.['x-component-props']?.tooltip || '',
+                    'x-decorator': 'FormItem',
+                    'x-component': 'Input.TextArea',
+                    'x-component-props': {},
+                  },
+                },
+              } as ISchema,
+              onSubmit({ tooltip }) {
+                field.componentProps.tooltip = tooltip;
+                columnSchema['x-component-props'] = columnSchema['x-component-props'] || {};
+                columnSchema['x-component-props']['tooltip'] = tooltip;
+                dn.emit('patch', {
+                  schema: {
+                    'x-uid': columnSchema['x-uid'],
+                    'x-component-props': columnSchema['x-component-props'],
+                  },
+                });
               },
             };
           },
@@ -89,7 +127,13 @@ export const tableColumnSettings = new SchemaSettings({
           },
           useVisible() {
             const { fieldSchema } = useColumnSchema();
+            const { isInSubTable } = useFlag();
             const field: any = useField();
+
+            if (!isInSubTable) {
+              return true;
+            }
+
             const path = field.path?.splice(field.path?.length - 1, 1);
             if (fieldSchema) {
               const isReadPretty = field.form.query(`${path.concat(`*.` + fieldSchema.name)}`).get('readPretty');
@@ -121,7 +165,7 @@ export const tableColumnSettings = new SchemaSettings({
                 title: t('Column width'),
                 properties: {
                   width: {
-                    default: columnSchema?.['x-component-props']?.['width'] || 200,
+                    default: columnSchema?.['x-component-props']?.['width'] || 100,
                     'x-decorator': 'FormItem',
                     'x-component': 'InputNumber',
                     'x-component-props': {},
@@ -154,11 +198,12 @@ export const tableColumnSettings = new SchemaSettings({
             const { getInterface } = useCollectionManager_deprecated();
             const interfaceCfg = getInterface(collectionField?.interface);
             const { currentMode } = useAssociationFieldContext();
-
             return (
               interfaceCfg?.sortable === true &&
               !currentMode &&
-              (collection?.name === collectionField?.collectionName || !collectionField?.collectionName)
+              (collection?.name === collectionField?.collectionName ||
+                !collectionField?.collectionName ||
+                collectionField?.inherit)
             );
           },
           useComponentProps() {
@@ -381,6 +426,48 @@ export const tableColumnSettings = new SchemaSettings({
             };
           },
         },
+        {
+          name: 'hidden',
+          type: 'switch',
+          useComponentProps() {
+            const field: any = useField();
+            const { t } = useTranslation();
+            const columnSchema = useFieldSchema();
+            const { dn } = useDesignable();
+
+            return {
+              title: (
+                <span>
+                  {t('Hide column')}
+                  <Tooltip
+                    title={t(
+                      'In configuration mode, the entire column becomes transparent. In non-configuration mode, the entire column will be hidden. Even if the entire column is hidden, its configured default values and other settings will still take effect.',
+                    )}
+                  >
+                    <QuestionCircleOutlined style={{ marginLeft: 4, opacity: 0.65 }} />
+                  </Tooltip>
+                </span>
+              ),
+              checked: field.componentProps.columnHidden,
+              onChange: (v) => {
+                const schema: ISchema = {
+                  ['x-uid']: columnSchema['x-uid'],
+                };
+                columnSchema['x-component-props'] = {
+                  ...columnSchema['x-component-props'],
+                  columnHidden: v,
+                };
+                schema['x-component-props'] = columnSchema['x-component-props'];
+                field.componentProps.columnHidden = v;
+                dn.emit('patch', {
+                  schema,
+                });
+                dn.refresh();
+              },
+            };
+          },
+        },
+
         fieldComponentSettingsItem,
       ],
     },

@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { raw, untracked } from '@formily/reactive';
+import { untracked } from '@formily/reactive';
 import { getValuesByPath } from '@nocobase/utils/client';
 import _ from 'lodash';
 import React, { createContext, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -49,13 +49,16 @@ const getFieldPath = (variablePath: string, variablesStore: Record<string, Varia
   };
 };
 
-const VariablesProvider = ({ children }) => {
+/**
+ * @internal
+ * Note: There can only be one VariablesProvider in the entire context. It cannot be used in plugins.
+ */
+const VariablesProvider = ({ children, filterVariables }: any) => {
   const ctxRef = useRef<Record<string, any>>({});
   const api = useAPIClient();
   const { getCollectionJoinField, getCollection } = useCollectionManager_deprecated();
   const compile = useCompile();
   const { builtinVariables } = useBuiltInVariables();
-
   const setCtx = useCallback((ctx: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => {
     if (_.isFunction(ctx)) {
       ctxRef.current = ctx(ctxRef.current);
@@ -65,18 +68,18 @@ const VariablesProvider = ({ children }) => {
   }, []);
 
   /**
-   * 1. 从 `ctx` 中根据 `path` 取值
-   * 2. 如果某个 `key` 不存在，且 `key` 是一个关联字段，则从 api 中获取数据，并缓存到 `ctx` 中
-   * 3. 如果某个 `key` 不存在，且 `key` 不是一个关联字段，则返回当前值
+   * 1. Get value from `ctx` based on `path`
+   * 2. If a `key` does not exist and is an association field, fetch data from api and cache it in `ctx`
+   * 3. If a `key` does not exist and is not an association field, return the current value
    */
   const getResult = useCallback(
     async (
       variablePath: string,
       localVariables?: VariableOption[],
       options?: {
-        /** 第一次请求时，需要包含的关系字段 */
+        /** Related fields that need to be included in the first request */
         appends?: string[];
-        /** do not request when the association field is empty */
+        /** Do not request when the association field is empty */
         doNotRequest?: boolean;
         /**
          * The operator related to the current field, provided when parsing the default value of the field
@@ -94,7 +97,7 @@ const VariablesProvider = ({ children }) => {
       const { fieldPath: fieldPathOfVariable } = getFieldPath(variablePath, _variableToCollectionName);
       const collectionNameOfVariable =
         list.length === 1
-          ? variableOption.collectionName
+          ? variableOption?.collectionName
           : getCollectionJoinField(fieldPathOfVariable, dataSource)?.target;
 
       if (!(variableName in current)) {
@@ -104,19 +107,28 @@ const VariablesProvider = ({ children }) => {
       for (let index = 0; index < list.length; index++) {
         if (current == null) {
           return {
-            value: current === undefined ? variableOption.defaultValue : current,
+            value: current === undefined ? variableOption?.defaultValue : current,
             dataSource,
             collectionName: collectionNameOfVariable,
           };
         }
 
+        if (_.isFunction(current)) {
+          break;
+        }
+
         const key = list[index];
-        const { fieldPath } = getFieldPath(list.slice(0, index + 1).join('.'), _variableToCollectionName);
+        const currentVariablePath = list.slice(0, index + 1).join('.');
+        const { fieldPath } = getFieldPath(currentVariablePath, _variableToCollectionName);
         const associationField: CollectionFieldOptions_deprecated = getCollectionJoinField(fieldPath, dataSource);
-        const collectionPrimaryKey = getCollection(collectionName)?.getPrimaryKey();
+        const collectionPrimaryKey = getCollection(collectionName, dataSource)?.getPrimaryKey();
         if (Array.isArray(current)) {
           const result = current.map((item) => {
-            if (!options?.doNotRequest && shouldToRequest(item?.[key]) && item?.[collectionPrimaryKey] != null) {
+            if (
+              !options?.doNotRequest &&
+              shouldToRequest(item?.[key], item, currentVariablePath) &&
+              item?.[collectionPrimaryKey] != null
+            ) {
               if (associationField?.target) {
                 const url = `/${collectionName}/${
                   item[associationField.sourceKey || collectionPrimaryKey]
@@ -134,8 +146,8 @@ const VariablesProvider = ({ children }) => {
                   })
                   .then((data) => {
                     clearRequested(url);
-                    item[key] = data.data.data;
-                    return item[key];
+                    const value = data.data.data;
+                    return value;
                   });
                 stashRequested(url, result);
                 return result;
@@ -146,7 +158,7 @@ const VariablesProvider = ({ children }) => {
           current = removeThroughCollectionFields(_.flatten(await Promise.all(result)), associationField);
         } else if (
           !options?.doNotRequest &&
-          shouldToRequest(current[key]) &&
+          shouldToRequest(current[key], current, currentVariablePath) &&
           current[collectionPrimaryKey] != null &&
           associationField?.target
         ) {
@@ -169,13 +181,8 @@ const VariablesProvider = ({ children }) => {
             clearRequested(url);
           }
 
-          // fix https://nocobase.height.app/T-3144，使用 `raw` 方法是为了避免触发 autorun，以修复 T-3144 的错误
-          if (!raw(current)[key]) {
-            // 把接口返回的数据保存起来，避免重复请求
-            raw(current)[key] = data.data.data;
-          }
-
-          current = removeThroughCollectionFields(getValuesByPath(current, key), associationField);
+          const value = data.data.data;
+          current = removeThroughCollectionFields(value, associationField);
         } else {
           current = removeThroughCollectionFields(getValuesByPath(current, key), associationField);
         }
@@ -186,7 +193,13 @@ const VariablesProvider = ({ children }) => {
       }
 
       const _value = compile(
-        _.isFunction(current) ? current({ fieldOperator: options?.fieldOperator, isParsingVariable: true }) : current,
+        _.isFunction(current)
+          ? await current({
+              fieldOperator: options?.fieldOperator,
+              isParsingVariable: true,
+              variableName: variablePath,
+            })
+          : current,
       );
       return {
         value: _value === undefined ? variableOption.defaultValue : _value,
@@ -198,7 +211,7 @@ const VariablesProvider = ({ children }) => {
   );
 
   /**
-   * 注册一个全局变量
+   * Register a global variable
    */
   const registerVariable = useCallback(
     (variableOption: VariableOption) => {
@@ -244,18 +257,18 @@ const VariablesProvider = ({ children }) => {
 
   const parseVariable = useCallback(
     /**
-     * 将变量字符串解析为真正的值
-     * @param str 变量字符串
-     * @param localVariables 局部变量，解析完成后会被清除
+     * Parse the variable string to the actual value
+     * @param str Variable string
+     * @param localVariables Local variables, will be cleared after parsing
      * @returns
      */
     async (
       str: string,
       localVariables?: VariableOption | VariableOption[],
       options?: {
-        /** 第一次请求时，需要包含的关系字段 */
+        /** Related fields that need to be included in the first request */
         appends?: string[];
-        /** do not request when the association field is empty */
+        /** Do not request when the association field is empty */
         doNotRequest?: boolean;
         /**
          * The operator related to the current field, provided when parsing the default value of the field
@@ -300,7 +313,7 @@ const VariablesProvider = ({ children }) => {
       const { fieldPath, dataSource } = getFieldPath(path, _variableToCollectionName);
       let result = getCollectionJoinField(fieldPath, dataSource);
 
-      // 当仅有一个例如 `$user` 这样的字符串时，需要拼一个假的 `collectionField` 返回
+      // When there is only a string like `$user`, a fake `collectionField` needs to be returned
       if (!result && !path.includes('.')) {
         result = {
           target: _variableToCollectionName[path]?.collectionName,
@@ -313,7 +326,7 @@ const VariablesProvider = ({ children }) => {
   );
 
   useEffect(() => {
-    builtinVariables.forEach((variableOption) => {
+    builtinVariables.forEach((variableOption: any) => {
       registerVariable({
         ...variableOption,
         defaultValue: _.has(variableOption, 'defaultValue') ? variableOption.defaultValue : null,
@@ -331,6 +344,7 @@ const VariablesProvider = ({ children }) => {
         getVariable,
         getCollectionField,
         removeVariable,
+        filterVariables,
       }) as VariablesContextType,
     [getCollectionField, getVariable, parseVariable, registerVariable, removeVariable, setCtx],
   );
@@ -342,13 +356,19 @@ VariablesProvider.displayName = 'VariablesProvider';
 
 export default VariablesProvider;
 
-function shouldToRequest(value) {
+function shouldToRequest(value, variableCtx: Record<string, any>, variablePath: string) {
+  if (
+    variablePath.split('.').length === 2 &&
+    (variablePath.startsWith('$nForm.') || variablePath.startsWith('$iteration.'))
+  ) {
+    return false;
+  }
+
   let result = false;
 
-  // value 有可能是一个响应式对象，使用 untracked 可以避免意外触发 autorun
+  // value may be a reactive object, using untracked to avoid unexpected autorun
   untracked(() => {
-    // fix https://nocobase.height.app/T-2502
-    // 兼容 `对多` 和 `对一` 子表单子表格字段的情况
+    // Compatible with `xxx to many` and `xxx to one` subform fields and subtable fields
     if (JSON.stringify(value) === '[{}]' || JSON.stringify(value) === '{}') {
       result = true;
       return;
@@ -387,8 +407,9 @@ function mergeVariableToCollectionNameWithLocalVariables(
 }
 
 /**
- * 去除关系字段中的中间表字段。
- * 如果在创建新记录的时候，存在关系字段的中间表字段，提交的时候会报错，所以需要去除。
+ * Remove `through collection fields` from association fields.
+ * If `through collection fields` exist in association fields when creating new records,
+ * it will cause errors during submission, so they need to be removed.
  * @param value
  * @param associationField
  * @returns

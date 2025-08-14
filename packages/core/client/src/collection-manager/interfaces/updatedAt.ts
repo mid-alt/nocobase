@@ -21,14 +21,15 @@ export class UpdatedAtFieldInterface extends CollectionFieldInterface {
     type: 'date',
     field: 'updatedAt',
     uiSchema: {
-      type: 'string',
+      type: 'datetime',
       title: '{{t("Last updated at")}}',
       'x-component': 'DatePicker',
       'x-component-props': {},
       'x-read-pretty': true,
     },
   };
-  availableTypes = ['date'];
+  description = '{{t("Store the last update time of each record")}}';
+  availableTypes = [];
   properties = {
     ...defaultProps,
     ...dateTimeProps,

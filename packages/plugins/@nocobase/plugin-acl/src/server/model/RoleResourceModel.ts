@@ -17,8 +17,8 @@ export class RoleResourceModel extends Model {
     role.revokeResource(resourceName);
   }
 
-  async writeToACL(options: { acl: ACL; transaction: any }) {
-    const { acl } = options;
+  async writeToACL(options: { acl: ACL; transaction?: any }) {
+    const { acl, transaction } = options;
     const resourceName = this.get('name') as string;
     const roleName = this.get('roleName') as string;
     const role = acl.getRole(roleName);
@@ -45,7 +45,7 @@ export class RoleResourceModel extends Model {
 
     // @ts-ignore
     const actions: RoleResourceActionModel[] = await this.getActions({
-      transaction: options.transaction,
+      transaction,
     });
 
     for (const action of actions) {
@@ -53,6 +53,7 @@ export class RoleResourceModel extends Model {
         acl,
         role,
         resourceName,
+        transaction,
       });
     }
   }

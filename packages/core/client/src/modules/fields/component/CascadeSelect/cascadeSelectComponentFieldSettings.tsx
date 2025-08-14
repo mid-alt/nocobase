@@ -12,10 +12,12 @@ import { useField, useFieldSchema } from '@formily/react';
 import { useTranslation } from 'react-i18next';
 import { SchemaSettings } from '../../../../application/schema-settings/SchemaSettings';
 import { useFieldComponentName } from '../../../../common/useFieldComponentName';
+import { useCollectionField } from '../../../../data-source';
 import { useDesignable, useFieldModeOptions, useIsAddNewForm } from '../../../../schema-component';
 import { isSubMode } from '../../../../schema-component/antd/association-field/util';
 import { useTitleFieldOptions } from '../../../../schema-component/antd/form-item/FormItem.Settings';
-import { useCollectionField } from '../../../../data-source';
+import { ellipsisSettingsItem } from '../Input/inputComponentSettings';
+import { setTheDataScope } from '../Select/selectComponentFieldSettings';
 
 const fieldComponent: any = {
   name: 'fieldComponent',
@@ -99,5 +101,5 @@ const titleField: any = {
 
 export const cascadeSelectComponentFieldSettings = new SchemaSettings({
   name: 'fieldSettings:component:CascadeSelect',
-  items: [fieldComponent, titleField],
+  items: [fieldComponent, titleField, ellipsisSettingsItem, setTheDataScope],
 });

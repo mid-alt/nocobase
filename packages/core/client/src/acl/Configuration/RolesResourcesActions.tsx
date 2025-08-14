@@ -10,12 +10,12 @@
 import { FormItem, FormLayout } from '@formily/antd-v5';
 import { ArrayField } from '@formily/core';
 import { connect, useField, useForm } from '@formily/react';
-import { Checkbox, Table, Tag } from 'antd';
+import { Checkbox, Table, Tag, TableProps } from 'antd';
 import { isEmpty } from 'lodash';
 import React, { createContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCollectionManager_deprecated, useCompile, useRecord } from '../..';
-import { useStyles } from '../style';
+import { antTableCell } from '../style';
 import { useAvailableActions } from './RoleTable';
 import { ScopeSelect } from './ScopeSelect';
 
@@ -34,7 +34,6 @@ export const RoleResourceCollectionContext = createContext<any>({});
 RoleResourceCollectionContext.displayName = 'RoleResourceCollectionContext';
 
 export const RolesResourcesActions = connect((props) => {
-  const { styles } = useStyles();
   // const { onChange } = props;
   const onChange = (values) => {
     const items = values.map((item) => {
@@ -103,51 +102,53 @@ export const RolesResourcesActions = connect((props) => {
         <FormLayout layout={'vertical'}>
           <FormItem label={t('Action permission')}>
             <Table
-              className={styles}
+              className={antTableCell}
               size={'small'}
               pagination={false}
-              columns={[
-                {
-                  dataIndex: 'displayName',
-                  title: t('Action display name'),
-                  render: (value) => compile(value),
-                },
-                {
-                  dataIndex: 'onNewRecord',
-                  title: t('Action type'),
-                  render: (onNewRecord) =>
-                    onNewRecord ? (
-                      <Tag color={'green'}>{t('Action on new records')}</Tag>
-                    ) : (
-                      <Tag color={'geekblue'}>{t('Action on existing records')}</Tag>
-                    ),
-                },
-                {
-                  dataIndex: 'enabled',
-                  title: t('Allow'),
-                  render: (enabled, action) => (
-                    <Checkbox
-                      checked={enabled}
-                      onChange={() => {
-                        toggleAction(action.name);
-                      }}
-                    />
-                  ),
-                },
-                {
-                  dataIndex: 'scope',
-                  title: t('Data scope'),
-                  render: (value, action) =>
-                    !action.onNewRecord && (
-                      <ScopeSelect
-                        value={value}
-                        onChange={(scope) => {
-                          setScope(action.name, scope);
+              columns={
+                [
+                  {
+                    dataIndex: 'displayName',
+                    title: t('Action display name'),
+                    render: (value) => compile(value),
+                  },
+                  {
+                    dataIndex: 'onNewRecord',
+                    title: t('Action type'),
+                    render: (onNewRecord) =>
+                      onNewRecord ? (
+                        <Tag color={'green'}>{t('Action on new records')}</Tag>
+                      ) : (
+                        <Tag color={'geekblue'}>{t('Action on existing records')}</Tag>
+                      ),
+                  },
+                  {
+                    dataIndex: 'enabled',
+                    title: t('Allow'),
+                    render: (enabled, action) => (
+                      <Checkbox
+                        checked={enabled}
+                        onChange={() => {
+                          toggleAction(action.name);
                         }}
                       />
                     ),
-                },
-              ]}
+                  },
+                  {
+                    dataIndex: 'scope',
+                    title: t('Data scope'),
+                    render: (value, action) =>
+                      !action.onNewRecord && (
+                        <ScopeSelect
+                          value={value}
+                          onChange={(scope) => {
+                            setScope(action.name, scope);
+                          }}
+                        />
+                      ),
+                  },
+                ] as TableProps['columns']
+              }
               dataSource={availableActions?.map((item) => {
                 let enabled = false;
                 let scope = null;
@@ -167,63 +168,65 @@ export const RolesResourcesActions = connect((props) => {
           </FormItem>
           <FormItem label={t('Field permission')}>
             <Table
-              className={styles}
+              className={antTableCell}
               pagination={false}
               dataSource={fieldPermissions}
-              columns={[
-                {
-                  dataIndex: ['uiSchema', 'title'],
-                  title: t('Field display name'),
-                  render: (value) => compile(value),
-                },
-                ...availableActionsWithFields.map((action) => {
-                  const checked = allChecked?.[action.name];
-                  return {
-                    dataIndex: action.name,
-                    title: (
-                      <>
+              columns={
+                [
+                  {
+                    dataIndex: ['uiSchema', 'title'],
+                    title: t('Field display name'),
+                    render: (value) => compile(value),
+                  },
+                  ...availableActionsWithFields.map((action) => {
+                    const checked = allChecked?.[action.name];
+                    return {
+                      dataIndex: action.name,
+                      title: (
+                        <>
+                          <Checkbox
+                            checked={checked}
+                            onChange={() => {
+                              const item = actionMap[action.name] || {
+                                name: action.name,
+                              };
+                              if (checked) {
+                                item.fields = [];
+                              } else {
+                                item.fields = collectionFields?.map?.((item) => item.name);
+                              }
+                              actionMap[action.name] = item;
+                              onChange(Object.values(actionMap));
+                            }}
+                          />{' '}
+                          {compile(action.displayName)}
+                        </>
+                      ),
+                      render: (checked, field) => (
                         <Checkbox
                           checked={checked}
+                          aria-label={`${action.name}_checkbox`}
                           onChange={() => {
                             const item = actionMap[action.name] || {
                               name: action.name,
                             };
+                            const fields: string[] = item.fields || [];
                             if (checked) {
-                              item.fields = [];
+                              const index = fields.indexOf(field.name);
+                              fields.splice(index, 1);
                             } else {
-                              item.fields = collectionFields?.map?.((item) => item.name);
+                              fields.push(field.name);
                             }
+                            item.fields = fields;
                             actionMap[action.name] = item;
                             onChange(Object.values(actionMap));
                           }}
-                        />{' '}
-                        {compile(action.displayName)}
-                      </>
-                    ),
-                    render: (checked, field) => (
-                      <Checkbox
-                        checked={checked}
-                        aria-label={`${action.name}_checkbox`}
-                        onChange={() => {
-                          const item = actionMap[action.name] || {
-                            name: action.name,
-                          };
-                          const fields: string[] = item.fields || [];
-                          if (checked) {
-                            const index = fields.indexOf(field.name);
-                            fields.splice(index, 1);
-                          } else {
-                            fields.push(field.name);
-                          }
-                          item.fields = fields;
-                          actionMap[action.name] = item;
-                          onChange(Object.values(actionMap));
-                        }}
-                      />
-                    ),
-                  };
-                }),
-              ]}
+                        />
+                      ),
+                    };
+                  }),
+                ] as TableProps['columns']
+              }
             />
           </FormItem>
         </FormLayout>

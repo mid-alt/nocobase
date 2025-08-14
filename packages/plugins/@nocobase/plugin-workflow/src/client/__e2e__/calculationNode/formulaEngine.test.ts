@@ -66,7 +66,7 @@ test('Collection event add data trigger, get trigger node single line text varia
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const collectionTriggerNode = new CollectionTriggerNode(page, workFlowName, triggerNodeCollectionName);
   await collectionTriggerNode.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -92,7 +92,7 @@ test('Collection event add data trigger, get trigger node single line text varia
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -158,7 +158,7 @@ test('Collection event add data triggers, get predecessor Formula engine arithme
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preCalculationNodePom = new CalculationNode(page, preCalculationNodeTitle);
   await preCalculationNodePom.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -184,7 +184,7 @@ test('Collection event add data triggers, get predecessor Formula engine arithme
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -260,7 +260,7 @@ test('Collection events add data triggers, get single line of text data for fron
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preQueryRecordNodePom = new QueryRecordNode(page, preQueryRecordNodeTitle);
   await preQueryRecordNodePom.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -287,7 +287,7 @@ test('Collection events add data triggers, get single line of text data for fron
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -365,7 +365,7 @@ test('Collection event add data trigger, get front added data node single line t
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preCreateRecordNodePom = new CreateRecordNode(page, preCreateRecordNodeTitle);
   await preCreateRecordNodePom.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -392,7 +392,7 @@ test('Collection event add data trigger, get front added data node single line t
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -462,7 +462,7 @@ test('Collection event adds data triggers, fetches data from front-end aggregati
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preAggregateNodePom = new AggregateNode(page, preAggregateNodeTitle);
   await preAggregateNodePom.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -488,7 +488,7 @@ test('Collection event adds data triggers, fetches data from front-end aggregati
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));
@@ -724,7 +724,7 @@ test.skip('Collection event add data trigger, get front manual node add form sin
 
   //配置计算节点
   await page.goto(`admin/workflow/workflows/${workflowId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const preManualNodeNodePom = new AggregateNode(page, preManualNodeNodeTitle);
   await preManualNodeNodePom.addNodeButton.click();
   await page.getByRole('button', { name: 'calculation', exact: true }).click();
@@ -755,7 +755,7 @@ test.skip('Collection event add data trigger, get front manual node add form sin
   // 3、预期结果：工作流成功触发,判断节点true通过
   const getWorkflow = await apiGetWorkflow(workflowId);
   const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-  const getWorkflowExecuted = getWorkflowObj.executed;
+  const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
   expect(getWorkflowExecuted).toBe(1);
   const getWorkflowNodeExecutions = await apiGetWorkflowNodeExecutions(workflowId);
   const getWorkflowNodeExecutionsObj = JSON.parse(JSON.stringify(getWorkflowNodeExecutions));

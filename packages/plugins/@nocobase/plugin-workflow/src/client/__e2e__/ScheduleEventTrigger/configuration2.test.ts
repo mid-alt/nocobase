@@ -53,7 +53,7 @@ test.describe('Configuration page to configure the Trigger node', () => {
 
     //配置工作流触发器
     await page.goto(`admin/workflow/workflows/${workflowId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     const scheduleTriggerNode = new ScheduleTriggerNode(page, workFlowName, triggerNodeCollectionName);
     await scheduleTriggerNode.nodeConfigure.click();
     await scheduleTriggerNode.startTimeEntryBox.click();
@@ -67,7 +67,7 @@ test.describe('Configuration page to configure the Trigger node', () => {
     // 3、预期结果：工作流成功触发
     const getWorkflow = await apiGetWorkflow(workflowId);
     const getWorkflowObj = JSON.parse(JSON.stringify(getWorkflow));
-    const getWorkflowExecuted = getWorkflowObj.executed;
+    const getWorkflowExecuted = getWorkflowObj.versionStats.executed;
     expect(getWorkflowExecuted).toBe(1);
 
     // 4、后置处理：删除工作流

@@ -1,4 +1,4 @@
-import { ISchema, observer, useForm } from '@formily/react';
+import { ISchema, useForm } from '@formily/react';
 import {
   Action,
   CustomRouterContextProvider,
@@ -9,6 +9,7 @@ import {
   SchemaComponentProvider,
   useActionContext,
 } from '@nocobase/client';
+import { createMemoryHistory } from 'history';
 import React from 'react';
 import { Router } from 'react-router-dom';
 
@@ -53,9 +54,10 @@ const schema: ISchema = {
   },
 };
 
-export default observer(() => {
+export default () => {
+  const history = createMemoryHistory();
   return (
-    <Router location={window.location} navigator={null}>
+    <Router location={history.location} navigator={history}>
       <CustomRouterContextProvider>
         <SchemaComponentProvider scope={{ useCloseAction }} components={{ Form, Action, Input, FormItem }}>
           <SchemaComponent schema={schema} />
@@ -63,4 +65,4 @@ export default observer(() => {
       </CustomRouterContextProvider>
     </Router>
   );
-});
+};
